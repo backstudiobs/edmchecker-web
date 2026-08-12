@@ -1,0 +1,2781 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>EDM 一致性檢查工具 v3.19.1</title>
+<style>
+  /* ==================== BASE ==================== */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang HK", "PingFang TC", "Noto Sans TC", sans-serif;
+    background: #f4f6f9; color: #1a2027; -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { margin: 0; }
+  code { background: #f0f2f5; padding: 1px 6px; border-radius: 4px; font-size: 12px; font-family: "SF Mono", Menlo, monospace; }
+  .img-debug { margin-top: 10px; border-top: 1px dashed #e2e6ea; padding-top: 8px; }
+  .img-debug summary { cursor: pointer; font-size: 12px; color: #6c7a86; padding: 4px 0; }
+  .img-debug-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  .img-debug-table th, .img-debug-table td { padding: 5px 8px; text-align: left; border-bottom: 1px solid #eef1f4; }
+  .img-debug-table th { color: #6c7a86; font-weight: 600; font-size: 11px; }
+  .img-debug-table tr.row-flag { background: #fff5f5; }
+  .img-debug-table code { font-size: 11px; }
+  button { font-family: inherit; }
+
+  /* ==================== HEADER ==================== */
+  .app-header {
+    background: linear-gradient(135deg, #003946 0%, #005c73 100%);
+    color: #fff; padding: 20px 32px 0 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .app-header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .app-header h1 .version { font-size: 11px; font-weight: 400; opacity: .7; background: rgba(255,255,255,.15); padding: 2px 8px; border-radius: 12px; }
+  .app-header .sub { font-size: 13px; opacity: .8; margin: 4px 0 16px 0; }
+  .app-tabs { display: flex; gap: 4px; }
+  .app-tabs button {
+    padding: 10px 20px; background: transparent; border: 0; color: rgba(255,255,255,.7);
+    font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; border-radius: 0;
+    transition: color .15s;
+  }
+  .app-tabs button:hover { color: #fff; }
+  .app-tabs button.active { color: #fff; border-bottom-color: #fff; font-weight: 600; }
+  .app-tabs button:disabled { opacity: .3; cursor: not-allowed; }
+
+  /* ==================== MAIN ==================== */
+  main { max-width: 1500px; margin: 0 auto; padding: 24px 32px; }
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadeIn .18s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  /* ==================== CARDS ==================== */
+  .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.05); margin-bottom: 16px; }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #003946; }
+
+  /* ==================== DROP ZONE ==================== */
+  .drop {
+    border: 2px dashed #c5d0d6; border-radius: 12px; padding: 40px 24px; text-align: center;
+    background: #fff; cursor: pointer; transition: .18s;
+  }
+  .drop:hover, .drop.hover { background: #eef7fa; border-color: #005c73; }
+  .drop .icon { font-size: 32px; margin-bottom: 8px; opacity: .7; }
+  .drop input { display: none; }
+  .drop .title { font-size: 15px; font-weight: 500; color: #003946; margin: 4px 0; }
+  .drop .hint { font-size: 12px; color: #6c7a86; }
+  .url-input-row { display: flex; gap: 8px; margin-top: 12px; }
+  .url-input-row input[type="url"] {
+    flex: 1; padding: 10px 14px; border: 1px solid #d1dae0; border-radius: 8px;
+    font-size: 13px; font-family: inherit; background: #fff;
+  }
+  .url-input-row input[type="url"]:focus { outline: none; border-color: #003946; box-shadow: 0 0 0 3px rgba(0,57,70,.1); }
+
+  /* ==================== FILE LIST ==================== */
+  .files { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .file-row {
+    display: grid; grid-template-columns: auto 1fr 190px 130px 80px 32px;
+    gap: 12px; align-items: center;
+    background: #fff; padding: 12px 16px; border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    transition: .12s;
+  }
+  .file-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .file-row .icon { font-size: 20px; }
+  .file-row .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .file-row .name .sub { font-size: 11px; color: #6c7a86; font-weight: 400; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-row select { padding: 7px 10px; border-radius: 6px; border: 1px solid #d1dae0; font-size: 13px; background: #fff; }
+  .file-row .pill { font-size: 11px; padding: 3px 8px; border-radius: 12px; text-align: center; white-space: nowrap; }
+  .pill.auto  { background: #e8f5e9; color: #2e7d32; }
+  .pill.manual { background: #fff3e0; color: #e65100; }
+  .file-row .del { border: 0; background: transparent; cursor: pointer; color: #b0bac1; font-size: 20px; padding: 4px 8px; border-radius: 4px; }
+  .file-row .del:hover { background: #ffebee; color: #c62828; }
+  .master-copy-row {
+    margin-top: 14px; padding: 12px 14px; border: 1px solid #d7e0e3; border-left: 4px solid #f5b800;
+    background: #fffdf7; display: flex; align-items: center; gap: 12px; min-height: 52px;
+  }
+  .master-copy-row .master-status { flex: 1; min-width: 0; font-size: 12px; color: #596970; line-height: 1.45; }
+  .master-copy-row .master-status b { color: #003946; }
+  .master-copy-row .master-ok { color: #2e7d32; font-weight: 650; }
+  .master-copy-row .master-remove { border: 0; background: transparent; color: #a0adb2; cursor: pointer; font-size: 19px; }
+  .master-copy-row .master-remove:hover { color: #c62828; }
+
+  /* ==================== BUTTONS ==================== */
+  .actions { display: flex; gap: 10px; margin-top: 16px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #003946; color: #fff; border: 0; border-radius: 8px;
+    padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: .12s;
+  }
+  .btn:hover:not(:disabled) { background: #002830; transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .btn.secondary { background: #fff; color: #003946; border: 1px solid #d1dae0; }
+  .btn.secondary:hover:not(:disabled) { background: #f4f6f9; }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn .icon { font-size: 15px; }
+
+  /* ==================== STATS TILES ==================== */
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat {
+    padding: 18px 16px; border-radius: 12px; text-align: center;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.05); transition: .12s;
+  }
+  .stat:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+  .stat .num { font-size: 30px; font-weight: 700; line-height: 1; }
+  .stat .lbl { font-size: 12px; color: #6c7a86; margin-top: 6px; }
+  .stat .icon { font-size: 20px; margin-bottom: 6px; display: block; }
+  .stat.err  .num { color: #e53935; }
+  .stat.warn .num { color: #f57c00; }
+  .stat.info .num { color: #1976d2; }
+  .stat.ok   .num { color: #43a047; }
+
+  /* ==================== LEGEND ==================== */
+  .legend { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; font-size: 12px; }
+  .legend .lg { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; background: #fff; border: 1px solid #e2e6ea; color: #4a5860; }
+  .legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot.identical { background: #43a047; }
+  .dot.variant   { background: #f57c00; }
+  .dot.mismatch  { background: #e53935; }
+  .dot.tieronly  { background: #1976d2; }
+  .dot.gift      { background: #8e24aa; }
+
+  /* ==================== FILTER CHIPS ==================== */
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .chip {
+    padding: 7px 14px; border-radius: 20px; background: #fff; border: 1px solid #d1dae0;
+    color: #4a5860; font-size: 12px; cursor: pointer; user-select: none; transition: .12s;
+  }
+  .chip.active { background: #003946; color: #fff; border-color: #003946; }
+  .chip:hover:not(.active) { background: #f4f6f9; border-color: #003946; }
+
+  /* ==================== SIDE-BY-SIDE TABLE ==================== */
+  .align-wrap { overflow-x: auto; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  table.align { border-collapse: collapse; width: 100%; font-size: 13px; table-layout: fixed; }
+  table.align th, table.align td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid #eef1f4; word-break: break-word; }
+  table.align thead th { background: #fafbfc; font-weight: 600; font-size: 12px; color: #003946; position: sticky; top: 0; border-bottom: 2px solid #003946; z-index: 1; }
+  table.align thead th .file-label { display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  table.align thead th small { color: #6c7a86; font-weight: 400; display: block; margin-top: 2px; font-size: 11px; }
+  table.align .col-idx { width: 44px; text-align: center; color: #b0bac1; font-weight: 600; font-size: 12px; }
+  table.align .col-status { width: 110px; }
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 12px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .badge.identical { background: #e8f5e9; color: #2e7d32; }
+  .badge.variant   { background: #fff3e0; color: #e65100; }
+  .badge.mismatch  { background: #ffebee; color: #c62828; }
+  .badge.tieronly  { background: #e3f2fd; color: #1565c0; }
+  .badge.gift      { background: #f3e5f5; color: #6a1b9a; }
+  tr.row-identical td.cell-content { background: #f7fbf7; }
+  tr.row-variant   td.cell-content { background: #fffaf0; }
+  tr.row-mismatch  td.cell-content { background: #fff5f5; }
+  tr.row-tieronly  td.cell-content { background: #f5faff; }
+  tr.row-gift      td.cell-content { background: #faf5fc; }
+  td.cell-empty { background: #fafafa; color: #ccc; text-align: center; font-size: 20px; }
+  .cell-content .txt { line-height: 1.55; }
+  .cell-content .style-warn { display: inline-block; margin-top: 6px; font-size: 10px; color: #e65100; background: #fff3e0; padding: 2px 7px; border-radius: 10px; }
+  .cell-content .outlier-badge { display: inline-block; margin-top: 6px; font-size: 10px; color: #c62828; background: #ffebee; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+  .cell-content .majority-badge { display: inline-block; margin-top: 6px; font-size: 10px; color: #2e7d32; background: #e8f5e9; padding: 2px 7px; border-radius: 10px; }
+  .cell-content mark { background: #fff59d; padding: 0 2px; border-radius: 2px; font-weight: 500; }
+
+  /* ==================== SINGLE ISSUES ==================== */
+  .single-mail-card { border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.05); margin-bottom: 10px; overflow: hidden; }
+  .single-mail-card summary {
+    padding: 14px 18px; cursor: pointer; font-weight: 500; font-size: 14px;
+    display: flex; justify-content: space-between; align-items: center; list-style: none;
+  }
+  .single-mail-card summary::-webkit-details-marker { display: none; }
+  .single-mail-card summary:before { content: '▸'; margin-right: 8px; color: #b0bac1; transition: transform .15s; }
+  .single-mail-card[open] summary:before { transform: rotate(90deg); }
+  .single-mail-card summary .count-badge { font-size: 11px; color: #6c7a86; background: #f4f6f9; padding: 3px 10px; border-radius: 10px; }
+  .single-mail-card .body { padding: 0 18px 14px 18px; }
+  .single-mail-card .issue { padding: 10px 0; border-top: 1px solid #eef1f4; font-size: 13px; }
+  .single-mail-card .issue:first-child { border-top: 0; }
+  .single-mail-card .issue .sev { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 4px; margin-right: 8px; font-weight: 500; }
+  .sev.err  { background: #ffebee; color: #c62828; }
+  .sev.warn { background: #fff3e0; color: #e65100; }
+  .sev.info { background: #e3f2fd; color: #1565c0; }
+  .single-mail-card .snip { background: #f4f6f9; padding: 8px 12px; margin-top: 6px; border-radius: 6px; font-family: "SF Mono", Menlo, monospace; font-size: 11px; color: #4a5860; white-space: pre-wrap; word-break: break-all; max-height: 100px; overflow: auto; }
+
+  /* ==================== PREVIEW TAB ==================== */
+  .preview-layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; height: calc(100vh - 200px); min-height: 500px; }
+  .preview-sidebar { background: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05); overflow-y: auto; }
+  .preview-sidebar h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: #6c7a86; margin-bottom: 10px; }
+  .mail-picker { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+  .mail-picker button {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 12px; background: #f4f6f9; border: 0; border-radius: 8px;
+    text-align: left; cursor: pointer; font-size: 13px; color: #1a2027; transition: .12s;
+  }
+  .mail-picker button:hover { background: #e6ebef; }
+  .mail-picker button.active { background: #003946; color: #fff; }
+  .mail-picker button .tier {
+    display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px;
+    border-radius: 8px; background: rgba(0,57,70,.12); color: #003946;
+    margin-top: 4px; letter-spacing: .3px;
+  }
+  .mail-picker button.active .tier { background: rgba(255,255,255,.22); color: #fff; }
+  .mail-picker button .cnt { font-size: 10px; padding: 2px 6px; background: rgba(255,255,255,.25); border-radius: 8px; }
+  .mail-picker button.active .cnt { background: rgba(255,255,255,.25); }
+  .mail-picker button:not(.active) .cnt { background: #fff; color: #c62828; font-weight: 600; }
+  .mail-picker button:not(.active) .cnt.zero { color: #6c7a86; }
+
+  .jumplist { display: flex; flex-direction: column; gap: 4px; }
+  .jump-item {
+    padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    display: flex; align-items: flex-start; gap: 8px; line-height: 1.4;
+    color: #1a2027; transition: .1s;
+  }
+  .jump-item:hover { background: #f4f6f9; }
+  .jump-item .num { flex: 0 0 40px; background: #f4f6f9; text-align: center; border-radius: 4px; font-weight: 600; font-size: 11px; padding: 2px 4px; color: #6c7a86; white-space: nowrap; }
+  .jump-item.err .num  { background: #ffebee; color: #c62828; }
+  .jump-item.warn .num { background: #fff3e0; color: #e65100; }
+  .jump-item.info .num { background: #e3f2fd; color: #1565c0; }
+  .jump-item .text { flex: 1; }
+
+  .preview-main { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.05); overflow: hidden; display: flex; flex-direction: column; }
+  .viewport-picker { display: inline-flex; gap: 4px; padding: 3px; background: #f4f6f9; border-radius: 8px; }
+  .viewport-picker button {
+    padding: 5px 11px; border: 0; background: transparent; border-radius: 5px;
+    font-size: 11px; cursor: pointer; color: #4a5860; font-weight: 500; transition: .12s;
+  }
+  .viewport-picker button:hover:not(.active) { background: rgba(0,0,0,.06); }
+  .viewport-picker button.active { background: #003946; color: #fff; }
+  .preview-frame-wrap { flex: 1; overflow: auto; background: #eef1f4; display: flex; justify-content: center; padding: 12px; }
+  .preview-toolbar { padding: 12px 16px; border-bottom: 1px solid #eef1f4; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #6c7a86; gap: 12px; flex-wrap: wrap; }
+  .preview-toolbar b { color: #1a2027; }
+  .preview-toolbar .tier-badge {
+    display: inline-flex; align-items: center; padding: 4px 12px; background: #003946; color: #fff;
+    border-radius: 14px; font-size: 12px; font-weight: 600; margin-right: 10px; letter-spacing: .3px;
+  }
+  .preview-toolbar .toolbar-main { display: flex; align-items: center; flex: 1; min-width: 0; }
+  .preview-toolbar .toolbar-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .preview-frame {
+    border: 1px solid #d1dae0; background: #fff; border-radius: 6px;
+    width: 100%; height: 100%; transition: width .2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+  }
+  .preview-frame.width-375  { width: 375px; max-width: 100%; }
+  .preview-frame.width-768  { width: 768px; max-width: 100%; }
+  .preview-frame.width-full { width: 100%; }
+  .preview-empty { padding: 60px; text-align: center; color: #b0bac1; }
+
+  /* ==================== RULES PANEL ==================== */
+  .rules-content { font-size: 14px; line-height: 1.7; color: #4a5860; }
+  .rules-content h3 { color: #003946; margin: 20px 0 8px 0; font-size: 14px; }
+  .rules-content ul { margin: 8px 0 12px 0; padding-left: 22px; }
+  .rules-content li { margin: 4px 0; }
+
+  /* ==================== MISC ==================== */
+  .empty { padding: 50px; text-align: center; color: #b0bac1; font-size: 14px; }
+
+  /* ==================== SUN LIFE-INSPIRED UI v3.16 ==================== */
+  :root {
+    --sl-teal: #004c5b;
+    --sl-teal-dark: #003946;
+    --sl-blue: #006f8b;
+    --sl-gold: #f5b800;
+    --sl-gold-soft: #fff6d9;
+    --sl-cream: #fffaf0;
+    --sl-ink: #20292d;
+    --sl-muted: #61717a;
+    --sl-line: #dbe2e5;
+    --sl-surface: #ffffff;
+    --sl-bg: #f5f6f4;
+  }
+  body { background: var(--sl-bg); color: var(--sl-ink); }
+  .app-header {
+    background: var(--sl-surface); color: var(--sl-teal-dark); padding: 0;
+    border-top: 5px solid var(--sl-gold); border-bottom: 1px solid var(--sl-line);
+    box-shadow: 0 2px 12px rgba(0,57,70,.06);
+  }
+  .brand-row {
+    max-width: 1500px; margin: 0 auto; padding: 18px 32px 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  }
+  .brand-lockup { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .brand-sun {
+    width: 44px; height: 44px; flex: 0 0 44px; border: 2px solid var(--sl-gold);
+    border-radius: 50%; display: grid; place-items: center; color: var(--sl-gold);
+    font-size: 25px; line-height: 1; background: var(--sl-gold-soft);
+  }
+  .brand-copy { min-width: 0; }
+  .app-header h1 { color: var(--sl-teal-dark); font-size: 21px; font-weight: 650; gap: 10px; letter-spacing: -.2px; }
+  .app-header h1 .version {
+    color: var(--sl-teal); opacity: 1; background: #e8f2f3; border: 1px solid #cfe0e3;
+    padding: 3px 9px; font-weight: 600;
+  }
+  .brand-kicker { margin-top: 3px; color: var(--sl-muted); font-size: 12px; letter-spacing: .15px; }
+  .header-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .header-meta span {
+    border: 1px solid var(--sl-line); padding: 6px 10px; border-radius: 2px;
+    color: var(--sl-muted); background: #fff; font-size: 11px; white-space: nowrap;
+  }
+  .app-header .sub {
+    max-width: none; margin: 0; padding: 10px max(32px, calc((100vw - 1500px) / 2 + 32px));
+    color: #47565d; opacity: 1; background: var(--sl-gold-soft); border-top: 1px solid #f7e4a2;
+    border-bottom: 1px solid #f4df95; font-size: 12px;
+  }
+  .app-tabs { max-width: 1500px; margin: 0 auto; padding: 0 32px; gap: 28px; }
+  .app-tabs button {
+    color: #52636a; padding: 14px 2px 13px; border-bottom: 4px solid transparent;
+    font-size: 14px; letter-spacing: .1px;
+  }
+  .app-tabs button:hover { color: var(--sl-teal-dark); }
+  .app-tabs button.active { color: var(--sl-teal-dark); border-bottom-color: var(--sl-gold); font-weight: 700; }
+  .app-tabs button:disabled { color: #9aa6ab; opacity: .58; }
+
+  main { max-width: 1500px; padding: 28px 32px 48px; }
+  .card {
+    border-radius: 3px; border: 1px solid var(--sl-line); padding: 22px;
+    box-shadow: 0 2px 10px rgba(0,57,70,.045); margin-bottom: 20px;
+  }
+  .card h2 { color: var(--sl-teal-dark); font-size: 17px; padding-bottom: 11px; border-bottom: 2px solid var(--sl-gold); }
+  #panel-overview > .card:first-child { border-top: 4px solid var(--sl-gold); }
+  .drop {
+    display: block; border: 1.5px dashed #b7c8cc; border-radius: 2px; padding: 48px 24px;
+    background: linear-gradient(180deg, #fffdf7 0%, var(--sl-cream) 100%);
+  }
+  .drop:hover, .drop.hover { background: var(--sl-gold-soft); border-color: var(--sl-teal); }
+  .drop .icon { color: var(--sl-gold); opacity: 1; }
+  .drop .title { color: var(--sl-teal-dark); font-size: 16px; font-weight: 650; }
+  .drop .hint { color: var(--sl-muted); }
+  .url-input-row { margin-top: 14px; }
+  .url-input-row input[type="url"] { border-radius: 2px; border-color: #bdcbd0; min-height: 42px; }
+  .url-input-row input[type="url"]:focus { border-color: var(--sl-blue); box-shadow: 0 0 0 3px rgba(0,111,139,.12); }
+  .btn { border-radius: 2px; background: var(--sl-teal); min-height: 42px; font-weight: 650; }
+  .btn:hover:not(:disabled) { background: var(--sl-teal-dark); box-shadow: none; transform: none; }
+  .btn.secondary { color: var(--sl-teal-dark); border-color: #b9c8cc; border-radius: 2px; }
+  .btn.secondary:hover:not(:disabled) { background: var(--sl-gold-soft); border-color: var(--sl-gold); }
+  .files { gap: 0; border: 1px solid #e4e9eb; }
+  .file-row {
+    border-radius: 0; box-shadow: none; border-bottom: 1px solid #e7ecee;
+    padding: 14px 16px; background: #fff;
+  }
+  .file-row:last-child { border-bottom: 0; }
+  .file-row:hover { box-shadow: inset 4px 0 0 var(--sl-gold); background: #fffdf7; }
+  .file-row select { border-radius: 2px; border-color: #c5d1d5; min-height: 36px; }
+  .pill.auto { background: #e8f4ea; color: #2f773d; }
+  .pill.manual { background: var(--sl-gold-soft); color: #825e00; }
+
+  .summary { gap: 14px; margin: 4px 0 22px; }
+  .stat {
+    border-radius: 3px; border: 1px solid var(--sl-line); box-shadow: none;
+    padding: 19px 14px 17px; position: relative; overflow: hidden;
+  }
+  .stat:before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: var(--sl-gold); }
+  .stat:hover { transform: none; box-shadow: 0 4px 12px rgba(0,57,70,.07); }
+  .stat .num { font-size: 32px; }
+  .stat .lbl { color: var(--sl-muted); }
+  .stat.ok .num { color: #2f843d; }
+  .legend .lg, .chip, .badge { border-radius: 2px; }
+  .chip.active { background: var(--sl-teal); border-color: var(--sl-teal); }
+  .align-wrap { border-radius: 2px; border: 1px solid var(--sl-line); box-shadow: none; }
+  table.align thead th { background: var(--sl-cream); color: var(--sl-teal-dark); border-bottom-color: var(--sl-teal); }
+  table.align th, table.align td { border-bottom-color: #e5eaec; }
+  tr.row-identical td.cell-content { background: #f8fbf8; }
+  tr.row-variant td.cell-content { background: #fffaf0; }
+  .single-mail-card { border-radius: 2px; border: 1px solid var(--sl-line); box-shadow: none; }
+  .single-mail-card summary { background: #fbfcfc; }
+  .single-mail-card[open] summary { color: var(--sl-teal-dark); border-bottom: 1px solid #e6ebed; }
+  .single-mail-card summary .count-badge { border-radius: 2px; }
+
+  .preview-layout { grid-template-columns: 280px minmax(0, 1fr); gap: 18px; height: calc(100vh - 245px); }
+  .preview-sidebar, .preview-main { border-radius: 3px; border: 1px solid var(--sl-line); box-shadow: none; }
+  .preview-sidebar { border-top: 4px solid var(--sl-gold); }
+  .preview-sidebar h3 { color: var(--sl-teal-dark); }
+  .mail-picker button { border-radius: 2px; background: #f3f6f6; }
+  .mail-picker button.active { background: var(--sl-teal); }
+  .viewport-picker, .viewport-picker button { border-radius: 2px; }
+  .viewport-picker button.active { background: var(--sl-teal); }
+  .preview-toolbar { background: var(--sl-cream); border-bottom-color: #e3d9bd; }
+  .preview-toolbar .tier-badge { border-radius: 2px; background: var(--sl-teal); }
+  .preview-frame-wrap { background: #e9eeef; padding: 18px; }
+  .preview-frame { border-radius: 1px; box-shadow: 0 3px 14px rgba(0,57,70,.12); }
+  .rules-content h3 { color: var(--sl-teal-dark); border-left: 4px solid var(--sl-gold); padding-left: 10px; }
+
+  @media (max-width: 900px) {
+    .brand-row { padding: 14px 18px 12px; }
+    .brand-sun { width: 38px; height: 38px; flex-basis: 38px; font-size: 21px; }
+    .app-header h1 { font-size: 17px; }
+    .brand-kicker, .header-meta { display: none; }
+    .app-header .sub { padding: 9px 18px; line-height: 1.45; }
+    .app-tabs { padding: 0 18px; gap: 20px; overflow-x: auto; }
+    .app-tabs button { white-space: nowrap; padding-top: 12px; }
+    main { padding: 18px 14px 34px; }
+    .card { padding: 15px; }
+    .drop { padding: 34px 14px; }
+    .url-input-row { flex-wrap: wrap; }
+    .url-input-row input[type="url"] { flex-basis: 100%; }
+    .file-row { grid-template-columns: auto minmax(0,1fr) 32px; gap: 9px; }
+    .file-row select { grid-column: span 1; }
+    .file-row .pill { display: none; }
+    .file-row .del { grid-column: 3; grid-row: 1; }
+    .file-row select[data-kind="tier"] { grid-column: 2; }
+    .file-row select[data-kind="type"] { grid-column: 2; }
+    .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .preview-layout { display: block; height: auto; }
+    .preview-sidebar { margin-bottom: 14px; max-height: 330px; }
+    .preview-main { height: 72vh; min-height: 540px; }
+    .preview-toolbar { align-items: flex-start; }
+  }
+
+  @media (max-width: 520px) {
+    .brand-lockup { gap: 9px; }
+    .app-header h1 .version { display: none; }
+    .app-tabs { gap: 14px; }
+    .app-tabs button { font-size: 13px; }
+    .summary { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat { padding: 14px 8px; }
+    .stat .num { font-size: 26px; }
+    .stat .icon { font-size: 17px; }
+    .actions { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="brand-row">
+    <div class="brand-lockup">
+      <span class="brand-sun" aria-hidden="true">☀</span>
+      <div class="brand-copy">
+        <h1>EDM 一致性檢查工具 <span class="version">v3.19.1</span></h1>
+        <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
+      </div>
+    </div>
+    <div class="header-meta" aria-label="工具特色">
+      <span>🔒 100% 本機處理</span>
+      <span>Mobile + Desktop QA</span>
+    </div>
+  </div>
+  <div class="sub">Drop 多封 .eml，一鍵check：語言連結、字型、標點、跨MAIL文字一致性；可切換 side-by-side 對照或全圖預覽 + 貼memo</div>
+  <div class="app-tabs">
+    <button data-tab="overview" class="active">📊 概覽</button>
+    <button data-tab="preview" disabled>📄 全圖預覽 <span style="font-size:10px;opacity:.6;">(run先開)</span></button>
+    <button data-tab="rules">⚙️ 規則說明</button>
+  </div>
+</div>
+
+<main>
+  <!-- ==================== OVERVIEW ==================== -->
+  <section class="panel active" id="panel-overview">
+    <div class="card">
+      <label class="drop" id="drop">
+        <input type="file" id="fileInput" multiple accept=".eml,.html,.htm,.xml,message/rfc822,text/html,application/xml,text/xml">
+        <div class="icon">📥</div>
+        <div class="title">拖 .eml / .html / .xml／完整網頁資料夾入嚟，或按呢度選擇</div>
+        <div class="hint">支援一次過多封檔案；拖入完整 folder 會連圖片、CSS、字型一齊載入</div>
+      </label>
+      <div class="url-input-row">
+        <input type="url" id="urlInput" placeholder="或者貼 EDM 網頁版 URL（例：https://campaign.sunlife.com.hk/...）">
+        <button class="btn secondary" id="urlAddBtn">🌐 加入 URL</button>
+        <button class="btn secondary" id="folderBtn" type="button">📁 選擇整個資料夾</button>
+        <input type="file" webkitdirectory multiple id="folderInput" hidden>
+      </div>
+      <div style="font-size:11px;color:#6c7a86;margin-top:6px;">
+        💡 <b>下載完整網頁</b>後（HTML + 圖片folder），揀「📁 選整個資料夾」等圖片正常顯示喺preview
+      </div>
+      <div class="master-copy-row">
+        <input type="file" id="wordInput" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+        <button class="btn secondary" id="wordBtn" type="button">📘 加入 approved Word</button>
+        <div class="master-status" id="wordStatus">可選：加入 Word 後額外比對 TC／EN approved copy；唔加入時舊規則完全不變。</div>
+        <button class="master-remove" id="wordRemoveBtn" type="button" title="移除 Word" hidden>×</button>
+      </div>
+      <div class="files" id="files"></div>
+      <div class="actions">
+        <button class="btn" id="runBtn" disabled><span class="icon">▶</span> 執行檢查</button>
+        <button class="btn secondary" id="clearBtn" disabled>清除全部</button>
+      </div>
+    </div>
+    <div id="reportContainer"></div>
+  </section>
+
+  <!-- ==================== PREVIEW ==================== -->
+  <section class="panel" id="panel-preview">
+    <div id="previewContainer">
+      <div class="empty">請先喺「概覽」執行檢查</div>
+    </div>
+  </section>
+
+  <!-- ==================== RULES ==================== -->
+  <section class="panel" id="panel-rules">
+    <div class="card">
+      <h2>檢查規則</h2>
+      <div class="rules-content">
+        <h3>單封MAIL (Single-email)</h3>
+        <ul>
+          <li><b>Approved Word（可選）：</b>上載 `.docx` 後，自動讀第一個 TC／EN EDM 文案表；按 Email 語言比對 approved copy。另可加入 Tier／TC獎品／EN獎品表格驗證相應 Tier 獎品。無 Word 時不影響任何舊規則。</li>
+          <li><b>語言連結：</b>右上角「EN/繁體」link 指向嘅 <code>*_T{tier}_*_(EN|TC).html</code>，check 有無對應到你揀嘅 tier</li>
+          <li><b>多餘空白：</b>中文字之間嘅單一／連續空格（包括 <code>&amp;nbsp;</code>、全形空格）、句末 <code>&amp;nbsp;</code>、連續2+空格</li>
+          <li><b>標點：</b>中文段落用咗半形標點（,.!?()）、成對符號未閉合（「」『』（））</li>
+          <li><b>稱謂：</b>Chinese段落必須用「<code>您</code>」（避免用「<code>你</code>」）</li>
+          <li><b>術語：</b>Coupon統一用「<code>電子現金券</code>」，唔應該用「電子禮券」</li>
+          <li><b>金額格式：</b>HK$XX 之後接中文字時要加空格（正確：<code>HK$50 電子現金券</code>，錯：<code>HK$100券</code>）；前面接中文（例 <code>獲享HK$50</code>）係OK</li>
+          <li><b>HTML 雜訊：</b>空 <code>&lt;a&gt;</code> tag、<code>&lt;u&gt;</code> 同 <code>text-decoration:underline</code> 混用</li>
+        </ul>
+        <h3>EDM (電郵版) 必備 vs 網頁版禁用</h3>
+        <ul>
+          <li><b>📧 EDM 必須有：</b>「在瀏覽器查看 / View in browser」連結（用 <code>{{system.viewAsWebpageLink}}</code>）、稱謂（<code>{{lead.Salutation}} {{lead.Last Name}}</code>）、積金易號碼 <code>{{my.masked_empf_ID}}</code>、退訂連結（Unsubscribe program + Unsubscribe all）</li>
+          <li><b>🌐 網頁版禁止：</b>以上EDM必備嘅嘢通通唔應該出現喺網頁版</li>
+          <li>Auto-detect：HTML含 <code>{{system.*}}</code> / <code>{{lead.*}}</code> template placeholder → email；否則 → web；可以喺file row 手動改</li>
+        </ul>
+        <h3>URL / 資料夾 支援</h3>
+        <ul>
+          <li>可以直接貼URL加入check（會先 direct fetch，失敗fallback去corsproxy.io 或 allorigins）</li>
+          <li>如果全部fallback都失敗（可能係CORS/network），可以喺browser打開個網頁 → View Page Source → Save As → drag入嚟</li>
+          <li><b>完整網頁 folder 上載：</b>下載成 HTML + 圖片folder，撳「📁 選整個資料夾」揀嗰個folder，tool會自動將圖片連 CSS 綁做 blob URL，preview 就可以正確顯示 & 比對圖片</li>
+        </ul>
+        <h3>字型/CSS 跨MAIL比對（Mobile + Desktop）</h3>
+        <ul>
+          <li>會用 <b>iframe render</b> 每封MAIL喺 <b>Mobile 375</b> 同 <b>Desktop 1200</b> 兩個viewport下攞真正嘅 <code>getComputedStyle</code>（includes <code>&lt;style&gt;</code> block、<code>@media</code> query、inheritance — 唔止inline style）</li>
+          <li>Check keys: <b>文字對齊（置左/中/右）</b> / <code>font-weight</code>（BOLD） / <code>font-family</code> / <code>font-size</code> / <code>line-height</code> / <code>margin</code> / <code>color</code> / <code>font-style</code> / <code>text-decoration</code></li>
+          <li><b>文字對齊</b>用 <b>bounding-box 視覺偵測</b>（量度文字實際位置 vs 容器）— 唔理個置中係用 <code>text-align</code>、<code>margin:auto</code> 定 <code>&lt;td align&gt;</code> 做，都captured到。捉到「應該置左但置中」呢類問題</li>
+          <li>Majority vote：3+封MAIL之中1封唔一致 → 只 flag outlier；每個issue會標明係 📱 Mobile 定 💻 Desktop 出事</li>
+          <li>捉到之前 <b>inline-style only</b> check 錯過嘅：<code>&lt;style&gt;</code> block 內定義嘅樣式、responsive layout差異、BOLD/置中mismatch</li>
+        </ul>
+        <h3>圖片跨MAIL比對</h3>
+        <ul>
+          <li>比對 <code>&lt;img&gt;</code> 數量：3+封MAIL用 majority vote，少數outlier會flag「圖片數量同其他N封唔一致」</li>
+          <li>比對 <code>width</code> / <code>height</code>：majority vote，尺寸outlier會flag</li>
+          <li><b>跨 MAIL 圖片次序</b>：以圖片最近嘅標題作 anchor；只有同一張圖被放到不同內容標題之下先提示。普通文案或金額不同唔會再當圖片移位。</li>
+          <li><b>圖片對齊（置左/中/右）跨MAIL</b>：用 bounding-box 量度每張圖喺容器內嘅水平位置，喺 Mobile + Desktop 兩個viewport分別check。majority vote：某封MAIL圖片置中但其他置左 → flag</li>
+          <li><b>內容 Icon 方向一致性（單封MAIL）⭐</b>：比較同一內容組內各 icon 嘅方向；<b>全部置左或全部置中都視為正常</b>，只有混合方向先警告。Banner / hero / CTA（闊圖）同頂部 logo 自動排除。</li>
+          <li><b>圖片定位 debug</b>：像素差只保留喺收合 debug 表，方便技術驗證量度；一般 QA 提示只列出每張 icon 嘅方向，唔顯示像素。</li>
+          <li>用途：搵mobile版icon shift、被template漏走嘅圖、圖片size mismatch、圖片排位錯亂、圖片對齊唔一致</li>
+        </ul>
+        <h3>Viewport 切換</h3>
+        <ul>
+          <li>Preview toolbar：📱 375 / 📱 768 / 💻 Full — 切換iframe寬度，睇responsive layout差異</li>
+        </ul>
+        <h3>跨MAIL (Cross-email)</h3>
+        <ul>
+          <li>用文字相似度做 fuzzy alignment：某封MAIL多咗/少咗一段唔會cascade shift位</li>
+          <li>會遮走 tier 變數（HK$金額、tier名、asia miles數量）先比對</li>
+          <li><span class="badge identical">一致</span> masked後所有MAIL都完全一樣</li>
+          <li><span class="badge variant">只係變數</span> masked後一樣，raw text 只差 HK$金額 / tier名 — <b>正常</b></li>
+          <li><span class="badge mismatch">真·不一致</span> masked後仍然唔同 — <b>要人手check</b></li>
+          <li><span class="badge tieronly">Tier專屬</span> 只有某啲tier有嘅段落（例如T0多咗intro）— <b>正常</b></li>
+          <li>字型/CSS：同一段paragraph嘅 <code>font-family</code> / <code>font-size</code> / <code>line-height</code> / <code>margin</code> 跨MAIL必須一致</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+// ========================================================================
+// TIER CONFIG
+// ========================================================================
+const TIERS = [
+  { id: 'T0',   label: 'T0 · Essential 基本級',        enLink: 'LPI3_T0_EN.html',   order: 0 },
+  { id: 'T1-2', label: 'T1-2 · Bronze-Silver 寶銅-白銀', enLink: 'LPI3_T1-2_EN.html', order: 1 },
+  { id: 'T3',   label: 'T3 · Gold 黃金級',              enLink: 'LPI3_T3_EN.html',   order: 2 },
+  { id: 'T4-6', label: 'T4-6 · Platinum-Diamond 鉑金-鑽石級', enLink: 'LPI3_T4-6_EN.html', order: 3 },
+];
+const TIER_BY_ID = Object.fromEntries(TIERS.map(t => [t.id, t]));
+
+// ========================================================================
+// EML PARSER
+// ========================================================================
+function readAsArrayBuffer(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsArrayBuffer(file); }); }
+function splitHeadersBody(raw) { let sep = raw.indexOf('\r\n\r\n'); let sepLen = 4; if (sep === -1) { sep = raw.indexOf('\n\n'); sepLen = 2; } if (sep === -1) return { headers: raw, body: '' }; return { headers: raw.substring(0, sep), body: raw.substring(sep + sepLen) }; }
+function getHeader(headers, name) { const unfolded = headers.replace(/\r?\n[ \t]+/g, ' '); const re = new RegExp('^' + name + ':\\s*(.+)$', 'im'); const m = unfolded.match(re); return m ? m[1].trim() : null; }
+function parseContentType(ct) { if (!ct) return { type: 'text/plain', params: {} }; const [type, ...rest] = ct.split(';').map(s => s.trim()); const params = {}; for (const p of rest) { const eq = p.indexOf('='); if (eq === -1) continue; let k = p.substring(0, eq).trim().toLowerCase(); let v = p.substring(eq + 1).trim(); if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1); params[k] = v; } return { type: type.toLowerCase(), params }; }
+function decodeQP(text) { text = text.replace(/=\r?\n/g, ''); return text.replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))); }
+function decodeB64(text) { try { return atob(text.replace(/\s/g, '')); } catch (e) { return text; } }
+function bytesToUtf8(str, charset) { const bytes = new Uint8Array(str.length); for (let i = 0; i < str.length; i++) bytes[i] = str.charCodeAt(i) & 0xff; try { return new TextDecoder(charset || 'utf-8').decode(bytes); } catch (e) { return new TextDecoder('utf-8').decode(bytes); } }
+function decodeMimeWords(str) { if (!str) return ''; return str.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=(\s+(?==\?))?/g, (_, cs, enc, txt) => { let raw = enc.toLowerCase() === 'b' ? decodeB64(txt) : decodeQP(txt.replace(/_/g, ' ')); return bytesToUtf8(raw, cs); }); }
+function extractHtmlFromMimePart(raw) {
+  const { headers, body } = splitHeadersBody(raw);
+  const ct = parseContentType(getHeader(headers, 'Content-Type'));
+  const cte = (getHeader(headers, 'Content-Transfer-Encoding') || '7bit').toLowerCase();
+  const charset = ct.params.charset || 'utf-8';
+  if (ct.type.startsWith('multipart/')) {
+    const boundary = ct.params.boundary;
+    if (!boundary) return '';
+    const parts = splitMultipart(body, boundary);
+    const htmlParts = parts.map(extractHtmlFromMimePart).filter(Boolean);
+    return htmlParts[0] || '';
+  }
+  if (ct.type === 'text/html') {
+    let decoded = cte === 'quoted-printable' ? decodeQP(body) : (cte === 'base64' ? decodeB64(body) : body);
+    return bytesToUtf8(decoded, charset);
+  }
+  return '';
+}
+function splitMultipart(body, boundary) { const delim = '--' + boundary; const parts = []; let idx = body.indexOf(delim); if (idx === -1) return parts; let cursor = idx + delim.length; if (body.substr(cursor, 2) === '\r\n') cursor += 2; else if (body[cursor] === '\n') cursor += 1; while (cursor < body.length) { const next = body.indexOf(delim, cursor); if (next === -1) break; let end = next; if (body.substr(end - 2, 2) === '\r\n') end -= 2; else if (body[end - 1] === '\n') end -= 1; parts.push(body.substring(cursor, end)); cursor = next + delim.length; if (body.substr(cursor, 2) === '--') break; if (body.substr(cursor, 2) === '\r\n') cursor += 2; else if (body[cursor] === '\n') cursor += 1; } return parts; }
+function decodeXmlEntities(text) {
+  const safeCodePoint = (value, radix) => {
+    const point = parseInt(value, radix);
+    try { return Number.isFinite(point) ? String.fromCodePoint(point) : ''; } catch (e) { return ''; }
+  };
+  return String(text || '')
+    .replace(/&#x([0-9a-f]+);/gi, (_, value) => safeCodePoint(value, 16))
+    .replace(/&#(\d+);/g, (_, value) => safeCodePoint(value, 10))
+    .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&amp;/gi, '&');
+}
+function extractHtmlFromXml(raw) {
+  const source = String(raw || '');
+  const candidates = [];
+  for (const match of source.matchAll(/<!\[CDATA\[([\s\S]*?)\]\]>/g)) candidates.push(match[1]);
+  candidates.push(source, decodeXmlEntities(source));
+  const score = value => (value.match(/<(?:html|head|body|table|tr|td|div|p|img|style|link)\b/gi) || []).length;
+  let best = candidates.sort((a, b) => score(b) - score(a) || b.length - a.length)[0] || '';
+  const htmlStart = best.search(/<!doctype\s+html|<html\b/i);
+  if (htmlStart >= 0) best = best.slice(htmlStart);
+  return best;
+}
+async function parseEmlFile(file) {
+  const buf = await readAsArrayBuffer(file);
+  const bytes = new Uint8Array(buf);
+  let raw = '';
+  const CHUNK = 32768;
+  for (let i = 0; i < bytes.length; i += CHUNK) raw += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  const decodedRaw = bytesToUtf8(raw, 'utf-8');
+  if (/\.xml$/i.test(file.name)) {
+    const html = extractHtmlFromXml(decodedRaw);
+    if (!/<(?:html|body|table|div|p|img|style|link)\b/i.test(html)) throw new Error('XML 入面搵唔到可預覽嘅 HTML 內容');
+    return { fileName: file.name, subject: file.name, html };
+  }
+  if (/\.html?$/i.test(file.name) || /^\s*<!DOCTYPE|^\s*<html/i.test(decodedRaw.substring(0, 200))) {
+    return { fileName: file.name, subject: file.name, html: decodedRaw };
+  }
+  const { headers } = splitHeadersBody(raw);
+  const subject = decodeMimeWords(getHeader(headers, 'Subject') || file.name);
+  const html = extractHtmlFromMimePart(raw);
+  return { fileName: file.name, subject, html };
+}
+
+// ========================================================================
+// HTML → PARAGRAPHS
+// ========================================================================
+function parseDom(html) { return new DOMParser().parseFromString(html, 'text/html'); }
+function textOf(el) { return (el.textContent || '').replace(/ /g, ' ').trim(); }
+
+const PARA_SELECTOR = 'p, h1, h2, h3, h4, h5, h6, li';
+
+function extractParagraphs(doc) {
+  const paras = [];
+  const nodes = doc.querySelectorAll(PARA_SELECTOR);
+  nodes.forEach(n => {
+    const text = textOf(n);
+    if (!text) return;
+    paras.push({
+      tag: n.tagName.toLowerCase(),
+      text, html: n.innerHTML, rawHtml: n.outerHTML,
+      style: collectStyle(n), index: paras.length,
+    });
+  });
+  return paras;
+}
+const STYLE_KEYS = ['font-family', 'font-size', 'line-height', 'color', 'font-weight', 'margin', 'text-align', 'font-style', 'text-decoration'];
+function collectStyle(el) {
+  const s = {};
+  let cur = el;
+  const keys = STYLE_KEYS;
+  while (cur && cur.nodeType === 1) {
+    const inline = cur.getAttribute && cur.getAttribute('style');
+    if (inline) {
+      inline.split(';').forEach(d => {
+        const eq = d.indexOf(':'); if (eq === -1) return;
+        const k = d.substring(0, eq).trim().toLowerCase();
+        const v = d.substring(eq + 1).trim();
+        if (keys.includes(k) && !(k in s)) s[k] = v;
+      });
+    }
+    cur = cur.parentElement;
+  }
+  return s;
+}
+
+// ========================================================================
+// TIER-VARIABLE MASKING
+// ========================================================================
+function maskTierVariables(text) {
+  return text
+    .replace(/HK\$\s?[\d,]+(?:\.\d+)?/g, '⟨HKD⟩')
+    .replace(/\$\s?[\d,]+(?:\.\d+)?/g, '⟨AMT⟩')
+    .replace(/\b\d+\s?[x×]\s?/gi, '⟨N×⟩')
+    .replace(/(\d{2,4})\s?(?=「?亞洲萬里通)/g, '⟨MI⟩ ')
+    .replace(/(\d{2,4})\s?Asia Miles/gi, '⟨MI⟩ Asia Miles')
+    .replace(/\bT[0-6](?:-[0-6])?\b/g, '⟨TIER⟩')
+    .replace(/\b(Essential|Bronze|Silver|Gold|Platinum|Diamond|Diamond Plus)\b/gi, '⟨TIERNAME⟩')
+    .replace(/(基本級|寶銅|白銀|黃金級|鉑金|鑽石級|尊尚鑽石級|寶銅-白銀|鉑金-尊尚鑽石級|鉑金-鑽石級)/g, '⟨TIERNAME⟩')
+    .replace(/\s+/g, ' ').trim();
+}
+
+// Gift/reward keywords — differences in these segments are EXPECTED (tier gets different gifts)
+const GIFT_PATTERNS = /(?:電子禮券|禮券|e[‐\-]?Voucher|e[‐\-]?Cash|現金券|兌換券|Asia Miles|亞洲萬里通|里數|Starbucks|星巴克|Maxim|美心|PARKn?SHOP|百佳|Uber|7[‐\-]?Eleven|KFC|麥當勞|HKTV[a-z]*|Voucher|Coupon|時尚生活)/i;
+function isGiftItem(text) { return GIFT_PATTERNS.test(text); }
+const GIFT_VALUE_PATTERNS = /(?:電子現金券|電子禮券|禮券|e[‐\-]?Voucher|e[‐\-]?Cash|現金券|兌換券|Asia Miles|亞洲萬里通|里數|Starbucks|星巴克|Maxim|美心|PARKn?SHOP|百佳|Uber|7[‐\-]?Eleven|KFC|麥當勞|HKTV[a-z]*|Voucher|Coupon|時尚生活)/gi;
+function normalizeRewardSlots(text) {
+  return String(text || '').replace(
+    /完成登記即可獲享[\s\S]*?([，,]\s*率先開啟您的專屬禮遇之旅[。.]?)/g,
+    '完成登記即可獲享⟨PRIZE⟩$1'
+  );
+}
+function giftComparisonKey(text) {
+  return maskTierVariables(normalizeRewardSlots(text))
+    .replace(GIFT_VALUE_PATTERNS, '⟨GIFT⟩')
+    .replace(/⟨(?:HKD|AMT|MI|N×)⟩/g, '⟨VALUE⟩')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function bigrams(s) { const g = new Map(); for (let i = 0; i < s.length - 1; i++) { const k = s.substring(i, i+2); g.set(k, (g.get(k) || 0) + 1); } return g; }
+function similarity(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const A = bigrams(a), B = bigrams(b);
+  let inter = 0;
+  for (const [k, va] of A) { const vb = B.get(k); if (vb) inter += Math.min(va, vb); }
+  const sumA = [...A.values()].reduce((a,b)=>a+b, 0);
+  const sumB = [...B.values()].reduce((a,b)=>a+b, 0);
+  return (2 * inter) / (sumA + sumB || 1);
+}
+
+// ========================================================================
+// FUZZY ALIGNMENT
+// ========================================================================
+function buildAlignmentRows(mails) {
+  const lists = mails.map(m => {
+    const paras = extractParagraphs(parseDom(m.html));
+    return paras.map(p => ({ ...p, key: maskTierVariables(p.text) }));
+  });
+  const N = mails.length;
+  if (N === 0) return { rows: [], lists };
+  if (N === 1) return { rows: lists[0].map(p => ({ cells: [p], kind: 'identical', refPos: p.index, displayIdx: p.index + 1 })), lists };
+
+  let refIdx = 0;
+  for (let i = 1; i < N; i++) if (lists[i].length > lists[refIdx].length) refIdx = i;
+  const ref = lists[refIdx];
+
+  const alignments = lists.map((list, mi) => {
+    if (mi === refIdx) return { matched: ref.map((p, i) => i), unmatchedIdx: [] };
+    const matched = new Array(ref.length).fill(-1);
+    const used = new Set();
+    let cursor = 0;
+    const WINDOW = 12, THRESHOLD = 0.55;
+    for (let i = 0; i < ref.length; i++) {
+      const target = ref[i].key;
+      let bestJ = -1, bestScore = THRESHOLD;
+      const lo = Math.max(cursor, 0), hi = Math.min(list.length, cursor + WINDOW);
+      for (let j = lo; j < hi; j++) {
+        if (used.has(j)) continue;
+        const s = similarity(target, list[j].key);
+        if (s > bestScore) { bestScore = s; bestJ = j; if (s === 1) break; }
+      }
+      if (bestJ >= 0) { matched[i] = bestJ; used.add(bestJ); cursor = bestJ + 1; }
+    }
+    const unmatchedIdx = [];
+    for (let j = 0; j < list.length; j++) if (!used.has(j)) unmatchedIdx.push(j);
+    return { matched, unmatchedIdx };
+  });
+
+  const rows = ref.map((refPara, i) => {
+    const cells = new Array(N).fill(null);
+    cells[refIdx] = refPara;
+    alignments.forEach((a, mi) => {
+      if (mi === refIdx) return;
+      const j = a.matched[i];
+      cells[mi] = j >= 0 ? lists[mi][j] : null;
+    });
+    return { cells, refPos: i, kind: classifyRow(cells) };
+  });
+
+  const tierOnlyRows = [];
+  alignments.forEach((a, mi) => {
+    if (mi === refIdx) return;
+    for (const j of a.unmatchedIdx) {
+      const cells = new Array(N).fill(null);
+      cells[mi] = lists[mi][j];
+      tierOnlyRows.push({ cells, refPos: j - 0.5, kind: 'tieronly' });
+    }
+  });
+
+  const allRows = [...rows, ...tierOnlyRows].sort((a, b) => a.refPos - b.refPos);
+  allRows.forEach((r, i) => r.displayIdx = i + 1);
+  return { rows: allRows, lists };
+}
+
+function classifyRow(cells) {
+  const present = cells.filter(Boolean);
+  if (present.length === 0) return 'empty';
+  const anyGift = present.some(p => isGiftItem(p.text));
+  if (present.length < cells.length) {
+    return anyGift ? 'gift' : 'tieronly';
+  }
+  const keys = present.map(p => p.key);
+  const allKeysSame = keys.every(k => k === keys[0]);
+  if (!allKeysSame) {
+    if (anyGift) {
+      const giftKeys = present.map(p => giftComparisonKey(p.text));
+      if (giftKeys.every(k => k === giftKeys[0])) return 'gift';
+    }
+    return 'mismatch';
+  }
+  const rawSame = present.every(p => p.text === present[0].text);
+  return rawSame ? 'identical' : 'variant';
+}
+
+// Render mail into a hidden iframe at target viewport, then read getComputedStyle for each paragraph.
+// This captures styles from <style> blocks + media queries + inheritance — much more accurate than inline-only.
+async function computeParagraphStyles(mail, viewportWidth) {
+  return new Promise((resolve) => {
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox', 'allow-same-origin');
+    iframe.style.cssText = `position:absolute;left:-9999px;top:0;width:${viewportWidth}px;height:800px;visibility:hidden;border:0;`;
+    document.body.appendChild(iframe);
+    let done = false;
+    const finish = () => {
+      if (done) return; done = true;
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc) { document.body.removeChild(iframe); resolve({ paras: [], images: [] }); return; }
+        const win = iframe.contentWindow;
+        const paraNodes = Array.from(doc.querySelectorAll(PARA_SELECTOR)).filter(n => (n.textContent || '').replace(/\s+/g, ' ').trim());
+        const paras = paraNodes.map(n => {
+          const cs = win.getComputedStyle(n);
+          return {
+            'font-family': cs.fontFamily || '',
+            'font-size': cs.fontSize || '',
+            'font-weight': cs.fontWeight || '',
+            'line-height': cs.lineHeight || '',
+            'text-align': cs.textAlign || '',
+            'color': cs.color || '',
+            'font-style': cs.fontStyle || '',
+            'text-decoration': cs.textDecorationLine || cs.textDecoration || '',
+            'margin': `${cs.marginTop} ${cs.marginRight} ${cs.marginBottom} ${cs.marginLeft}`.trim(),
+            'align': classifyVisualAlign(win, doc, n),
+          };
+        });
+        // Image layout — alignment, size ratio, and the NEXT content block's left edge & alignment.
+        // Used to detect "icon is centered but the heading/text below it is left-aligned".
+        const allNodes = Array.from(doc.querySelectorAll(PARA_SELECTOR + ', img'));
+        const allElements = Array.from(doc.querySelectorAll('*'));
+        const hasTxt = (n) => n.tagName !== 'IMG' && (n.textContent || '').replace(/\s+/g, ' ').trim();
+        const imgNodes = Array.from(doc.querySelectorAll('img'));
+        const images = imgNodes.map((img, di) => {
+          const ir = img.getBoundingClientRect();
+          // container width for ratio (walk up past hugging wrappers)
+          let container = img.parentElement, cr = container ? container.getBoundingClientRect() : null, guard = 0;
+          while (container && cr && cr.width < ir.width * 1.2 && guard < 5) {
+            container = container.parentElement; cr = container ? container.getBoundingClientRect() : null; guard++;
+          }
+          const widthRatio = (cr && cr.width) ? ir.width / cr.width : 1;
+          // Find the nearest local content scope containing text AFTER this image.
+          // Searching the whole document made footer/link icons borrow an unrelated
+          // heading from a later row and polluted the content-icon group.
+          let contentScope = img.parentElement, scopeGuard = 0;
+          while (contentScope && scopeGuard < 6) {
+            const localText = Array.from(contentScope.querySelectorAll(PARA_SELECTOR)).filter(hasTxt);
+            if (localText.some(n => (img.compareDocumentPosition(n) & 4) !== 0)) break;
+            contentScope = contentScope.parentElement;
+            scopeGuard++;
+          }
+          const scopedNodes = contentScope ? Array.from(contentScope.querySelectorAll(PARA_SELECTOR + ', img')) : [];
+          const pos = scopedNodes.indexOf(img);
+          const groupContainer = contentScope && contentScope.parentElement;
+          const groupKey = groupContainer ? allElements.indexOf(groupContainer) : -1;
+          // Next text block inside the same local content scope
+          let nextText = null;
+          for (let k = pos + 1; k < scopedNodes.length; k++) {
+            if (hasTxt(scopedNodes[k])) {
+              const n = scopedNodes[k];
+              const rng = doc.createRange(); rng.selectNodeContents(n);
+              const tr = rng.getBoundingClientRect();
+              // A heading containing an inline <span>/<strong> plus trailing whitespace can
+              // produce multiple Range rects even when it is visually one line. The strict
+              // cross-mail geometry helper intentionally skips that case, so fall back to
+              // the actually-computed text-align for this image-to-content rule.
+              const cssTextAlignRaw = (win.getComputedStyle(n).textAlign || '').toLowerCase();
+              const cssTextAlign = cssTextAlignRaw === 'start' ? 'left' : (cssTextAlignRaw === 'end' ? 'right' : cssTextAlignRaw);
+              const visualTextAlign = classifyVisualAlign(win, doc, n);
+              nextText = { left: tr.left, align: visualTextAlign || cssTextAlign, text: (n.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40) };
+              break;
+            }
+          }
+          let prevHasText = false;
+          for (let k = pos - 1; k >= 0; k--) { if (hasTxt(allNodes[k])) { prevHasText = true; break; } }
+          return {
+            id: imgIdentity(img), domIndex: di,
+            align: classifyImageAlign(win, doc, img),
+            left: ir.left, width: ir.width, widthRatio,
+            nextText, prevHasText, groupKey,
+          };
+        });
+        document.body.removeChild(iframe);
+        resolve({ paras, images });
+      } catch (e) {
+        try { document.body.removeChild(iframe); } catch(_) {}
+        resolve({ paras: [], images: [] });
+      }
+    };
+    iframe.onload = () => setTimeout(finish, 150);  // allow fonts + late CSS a moment
+    setTimeout(finish, 4000);                        // safety timeout
+    iframe.srcdoc = mail.html;
+  });
+}
+
+// Detect VISUAL alignment (left/center/right) from the text's bounding box vs its container.
+// IMPORTANT: only reliable for SINGLE-LINE, non-full-width text (headings, standalone lines).
+// Multi-line body text wraps differently when content length differs (e.g. HK$100 vs HK$25),
+// which changes the bounding box and causes false positives — so we skip those (return '').
+function classifyVisualAlign(win, doc, el) {
+  try {
+    const range = doc.createRange();
+    range.selectNodeContents(el);
+    const lineRects = range.getClientRects();
+    // Multi-line → wrapping makes alignment detection unreliable → skip
+    if (lineRects.length !== 1) return '';
+    const tr = range.getBoundingClientRect();
+    const container = el.parentElement || el;
+    const cr = container.getBoundingClientRect();
+    if (!tr.width || !cr.width) return '';
+    // Text fills most of the container → alignment visually ambiguous → skip
+    if (tr.width > cr.width * 0.85) return '';
+    const leftGap = tr.left - cr.left;
+    const rightGap = cr.right - tr.right;
+    const tol = Math.max(8, cr.width * 0.1);
+    if (leftGap > tol && rightGap > tol && Math.abs(leftGap - rightGap) <= tol) return 'center';
+    if (rightGap <= tol && leftGap > tol) return 'right';
+    if (leftGap <= tol) return 'left';
+    return '';  // indeterminate → skip rather than guess
+  } catch (e) { return ''; }
+}
+
+// Image horizontal alignment via bounding box vs a wide-enough container.
+function classifyImageAlign(win, doc, img) {
+  try {
+    const ir = img.getBoundingClientRect();
+    if (!ir.width) return '';
+    // Walk up to an ancestor meaningfully wider than the image (skip wrappers that hug the image)
+    let container = img.parentElement, cr = container ? container.getBoundingClientRect() : null, guard = 0;
+    while (container && cr && cr.width < ir.width * 1.2 && guard < 5) {
+      container = container.parentElement;
+      cr = container ? container.getBoundingClientRect() : null;
+      guard++;
+    }
+    if (!cr || !cr.width) return '';
+    if (ir.width > cr.width * 0.9) return '';  // near full-width image → alignment N/A
+    const leftGap = ir.left - cr.left;
+    const rightGap = cr.right - ir.right;
+    const tol = Math.max(8, cr.width * 0.08);
+    if (leftGap > tol && rightGap > tol && Math.abs(leftGap - rightGap) <= tol) return 'center';
+    if (rightGap <= tol && leftGap > tol) return 'right';
+    if (leftGap <= tol) return 'left';
+    return '';
+  } catch (e) { return ''; }
+}
+
+function normalizeCssValue(v) {
+  if (!v) return '';
+  v = v.trim().toLowerCase();
+  v = v.replace(/\s+/g, ' ');
+  // strip units on zeros: 0px, 0em, 0rem, 0% → 0
+  v = v.replace(/\b0(?:px|em|rem|%|pt)\b/g, '0');
+  // collapse identical shorthand: "0 0 0 0" → "0"
+  const parts = v.split(' ');
+  if (parts.length > 1 && parts.every(p => p === parts[0])) v = parts[0];
+  return v;
+}
+function imgIdentity(img) {
+  const orig = img.getAttribute('data-ecm-orig');
+  if (orig) return orig;
+  const src = img.getAttribute('src') || '';
+  if (src.startsWith('blob:') || src.startsWith('data:')) return '(inline)';
+  return src.split('/').pop().split('?')[0] || '(img)';
+}
+
+// Extract images with their attributes for cross-mail comparison
+function extractImages(doc) {
+  const imgs = Array.from(doc.querySelectorAll('img'));
+  return imgs.map((img, i) => {
+    const src = img.getAttribute('src') || '';
+    const srcBase = imgIdentity(img);
+    return {
+      src, srcBase,
+      alt: img.getAttribute('alt') || '',
+      width: img.getAttribute('width') || '',
+      height: img.getAttribute('height') || '',
+      styleWidth: (img.getAttribute('style') || '').match(/width\s*:\s*([^;]+)/i)?.[1] || '',
+      styleHeight: (img.getAttribute('style') || '').match(/height\s*:\s*([^;]+)/i)?.[1] || '',
+      index: i,
+    };
+  });
+}
+
+// Cross-mail image comparison
+// Alignment strategy: match by srcBase (filename) — avoids cascade when one mail has fewer imgs
+function crossImageIssues(mails, tierLabelOf) {
+  const perMail = mails.map(() => []);
+  const lists = mails.map(m => extractImages(parseDom(m.html)));
+  if (lists.length < 2) return perMail;
+
+  // 1. Overall count (info-level — might be tier-specific icons)
+  const counts = lists.map(l => l.length);
+  if (new Set(counts).size > 1) {
+    const grp = {};
+    counts.forEach((c, i) => { (grp[c] = grp[c] || []).push(i); });
+    const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
+    const [majCount, majMails] = sorted[0];
+    if (majMails.length > mails.length / 2) {
+      counts.forEach((c, mi) => {
+        if (String(c) !== majCount) {
+          const diff = c - +majCount;
+          perMail[mi].push({
+            severity: 'info', category: '圖片數量',
+            message: `圖片數量 ${diff > 0 ? '多咗' : '少咗'} <b>${Math.abs(diff)}</b> 張（majority ${majMails.length} 封 = ${majCount} 張，呢封 = ${c}）— 有可能係 tier-specific icon（例如 T0 冇 lifestyle reward icon）`,
+          });
+        }
+      });
+    }
+  }
+
+  // 2. For each unique srcBase found across mails, compare attributes when img exists in majority mails
+  const allSrcs = new Set();
+  lists.forEach(l => l.forEach(im => im.srcBase && allSrcs.add(im.srcBase)));
+
+  for (const srcBase of allSrcs) {
+    // Take the FIRST img with this srcBase per mail (in case duplicates)
+    const perMailImg = lists.map(l => l.find(im => im.srcBase === srcBase));
+    const presentMails = perMailImg.map((im, i) => im ? i : null).filter(i => i !== null);
+    // Only compare attributes if img is in majority (>50%) of mails
+    if (presentMails.length <= mails.length / 2) continue;
+
+    ['width', 'height'].forEach(attr => {
+      const styleAttr = 'style' + attr[0].toUpperCase() + attr.slice(1);
+      const vals = presentMails.map(mi => ({
+        mi,
+        val: perMailImg[mi][attr] || perMailImg[mi][styleAttr] || '',
+      }));
+      const grp = {};
+      vals.forEach(v => { (grp[v.val] = grp[v.val] || []).push(v.mi); });
+      const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
+      if (sorted.length > 1) {
+        const [majVal, majMails] = sorted[0];
+        if (majMails.length > presentMails.length / 2) {
+          for (const [val, mailIds] of sorted.slice(1)) {
+            mailIds.forEach(mi => {
+              perMail[mi].push({
+                severity: 'warn', category: '圖片尺寸', imgId: srcBase,
+                message: `圖片 <code>${escapeHtml(srcBase)}</code> 嘅 <code>${attr}</code> 同 majority 唔同：其他 ${majMails.length} 封用 <code>${majVal || '(未設)'}</code>，呢封用 <code>${val || '(未設)'}</code>`,
+              });
+            });
+          }
+        }
+      }
+    });
+  }
+  return perMail;
+}
+
+const STYLE_KEY_LABEL = {
+  'align': '文字對齊（置左/中/右）',
+  'font-weight': '粗幼 font-weight',
+  'text-align': 'text-align (CSS)',
+  'font-family': '字型 font-family',
+  'font-size': '字號 font-size',
+  'line-height': '行高 line-height',
+  'color': '文字顏色 color',
+  'font-style': '斜體 font-style',
+  'text-decoration': '底線/刪除線 text-decoration',
+  'margin': '外邊距 margin',
+};
+const VALUE_LABEL = { left: '置左', center: '置中', right: '置右', '': '(未偵測)' };
+function styleValLabel(k, v) { return k === 'align' ? (VALUE_LABEL[v] || v) : v; }
+
+// Build interleaved block sequence (text paragraphs + images in document order)
+function extractBlockSequence(doc) {
+  const nodes = Array.from(doc.querySelectorAll(PARA_SELECTOR + ', img'));
+  const seq = [];
+  let lastText = '';
+  let lastHeading = '';
+  nodes.forEach(n => {
+    if (n.tagName === 'IMG') {
+      seq.push({ type: 'img', id: imgIdentity(n), prevText: lastText, prevHeading: lastHeading });
+    } else {
+      const t = textOf(n);
+      if (!t) return;
+      const key = maskTierVariables(t);
+      seq.push({ type: 'text', key });
+      lastText = key;
+      if (/^H[1-6]$/.test(n.tagName)) lastHeading = key;
+    }
+  });
+  return seq;
+}
+
+// SINGLE-MAIL: detect content icons that are centered while the content below them is left-aligned.
+// Rule (per reviewer): a small content icon should follow the content column's left edge.
+// Skip banners/hero/CTA (wide images) and the top logo (no preceding text). Threshold 12px.
+const IMG_CONTENT_ALIGN_TOL = 12;
+function isNonContentImage(im) {
+  const id = String(im.id || '');
+  return im.widthRatio > 0.6 || /(?:^|[_\-\s])(kv|hero|banner|logo)(?:[_\-\s.]|$)/i.test(id);
+}
+function checkImageContentAlign(mail) {
+  const issues = [];
+  const perImgFlagged = {};  // domIndex → {label:diff} to merge viewports
+  [['layoutMobile', '📱 Mobile 375'], ['layoutDesktop', '💻 Desktop 1200']].forEach(([key, label]) => {
+    const imgs = (mail[key] && mail[key].images) || [];
+    imgs.forEach(im => {
+      if (!im.nextText) return;                     // trailing image, no content column to compare
+      if (isNonContentImage(im)) return;             // banner / hero / logo / CTA may legitimately be centered
+      if (!im.prevHasText && im.domIndex === 0) return;  // top logo
+      if (im.nextText.align !== 'left') return;     // only when content is left-aligned
+      const leftDiff = Math.abs(im.left - im.nextText.left);
+      const imgCentered = im.align === 'center' || im.align === 'right';
+      if (imgCentered || leftDiff > IMG_CONTENT_ALIGN_TOL) {
+        if (!perImgFlagged[im.domIndex]) perImgFlagged[im.domIndex] = { id: im.id, nextText: im.nextText.text, viewports: [] };
+        perImgFlagged[im.domIndex].viewports.push({ label, align: im.align, diff: Math.round(leftDiff) });
+      }
+    });
+  });
+  Object.entries(perImgFlagged).forEach(([domIndex, info]) => {
+    const vpDesc = info.viewports.map(v => `${v.label}：${VALUE_LABEL[v.align] || v.align || '?'}（左邊界差約 ${v.diff}px）`).join('；');
+    issues.push({
+      severity: 'warn', category: '圖片對齊內容', imgIndex: +domIndex, previewOnly: true,
+      message: `圖片 <code>${escapeHtml(info.id)}</code> 置中/偏移，但下面內容「${escapeHtml(info.nextText)}」置左 — 請確認圖片是否應該置左<div class="ecm-snippet">${escapeHtml(vpDesc)}</div>`,
+    });
+  });
+  return issues;
+}
+
+// Within one local content group, all-left and all-centred are both valid.
+// Warn only when the group mixes directions. Pixel offsets remain debug-only.
+function checkIntraMailIconConsistency(mail) {
+  const imgs = (mail.layoutMobile && mail.layoutMobile.images) || (mail.layoutDesktop && mail.layoutDesktop.images) || [];
+  const rows = [];
+  imgs.forEach(im => {
+    if (isNonContentImage(im)) return;                   // banner / hero / logo / CTA
+    if (!im.prevHasText && im.domIndex === 0) return;   // top logo
+    if (!im.nextText) return;                           // no heading below
+    const leftDiff = Math.round(Math.abs(im.left - im.nextText.left));
+    const direction = leftDiff <= IMG_CONTENT_ALIGN_TOL
+      ? 'left'
+      : (['left', 'center', 'right'].includes(im.align) ? im.align : 'offset');
+    rows.push({ id: im.id, domIndex: im.domIndex, groupKey: im.groupKey, leftDiff, direction });
+  });
+  // Only compare icons that belong to the same local content row/group.
+  // This keeps footer/contact/link icons out of the reward-icon summary.
+  const groups = new Map();
+  rows.forEach(r => {
+    if (r.groupKey == null || r.groupKey < 0) return;
+    if (!groups.has(r.groupKey)) groups.set(r.groupKey, []);
+    groups.get(r.groupKey).push(r);
+  });
+  const failingGroup = [...groups.values()].find(group =>
+    group.length >= 2 && new Set(group.map(r => r.direction)).size > 1
+  );
+  if (!failingGroup) return [];
+  rows.splice(0, rows.length, ...failingGroup);
+  const listHtml = rows.map(r => `
+    <div class="ecm-file-card" style="background:rgba(246,166,35,.08) !important; border-left:3px solid #d88900 !important;">
+      <span class="ecm-file-label"><code>${escapeHtml(r.id)}</code></span>
+      <span class="ecm-file-value">${VALUE_LABEL[r.direction] || '偏移'}</span>
+    </div>`).join('');
+  return [{
+    severity: 'warn', category: '內容 Icon 方向不一致', imgIndex: rows[0].domIndex,
+    message: `同一內容組共有 <b>${rows.length}</b> 個 icon，但方向唔一致：<div class="ecm-file-list">${listHtml}</div><div class="ecm-snippet">請統一成同一方向（全部置左或全部置中）</div>`,
+  }];
+}
+
+// Transparency debug: for EVERY image, report its alignment + left-edge diff vs the next content block.
+// Lets the user verify the tool's measurements (incl. the OK ones), not just flagged images.
+function imageAlignDebug(mail, viewportKey = 'layoutDesktop') {
+  const imgs = (mail[viewportKey] && mail[viewportKey].images) || [];
+  return imgs.map(im => {
+    const nt = im.nextText;
+    const leftDiff = nt ? Math.round(Math.abs(im.left - nt.left)) : null;
+    const isContentIcon = !isNonContentImage(im) && !(!im.prevHasText && im.domIndex === 0);
+    return {
+      id: im.id,
+      align: im.align || '?',
+      leftDiff,
+      nextAlign: nt ? nt.align : null,
+      widthRatio: im.widthRatio,
+      role: isNonContentImage(im) ? 'banner/CTA' : (!im.prevHasText && im.domIndex === 0 ? 'logo' : 'content-icon'),
+      flagged: false,
+    };
+  });
+}
+
+// Detect image ALIGNMENT (置左/中/右) differences across mails at each viewport (majority vote)
+function crossImageAlignIssues(mails, tierLabelOf) {
+  const perMail = mails.map(() => []);
+  if (mails.length < 2) return perMail;
+  const viewports = [
+    { key: 'layoutMobile', label: '📱 Mobile 375' },
+    { key: 'layoutDesktop', label: '💻 Desktop 1200' },
+  ];
+  for (const vp of viewports) {
+    // Build id → per-mail align map (first occurrence of each image id)
+    const idAligns = {};  // id → { mailIndex: align }
+    mails.forEach((m, mi) => {
+      const imgs = (m[vp.key] && m[vp.key].images) || [];
+      imgs.forEach(im => {
+        if (!im.id || im.id === '(inline)' || !im.align) return;
+        if (!idAligns[im.id]) idAligns[im.id] = {};
+        if (idAligns[im.id][mi] === undefined) idAligns[im.id][mi] = im.align;
+      });
+    });
+    for (const id of Object.keys(idAligns)) {
+      const map = idAligns[id];
+      const presentMails = Object.keys(map).map(Number);
+      if (presentMails.length < 2) continue;
+      const grp = {};
+      presentMails.forEach(mi => { (grp[map[mi]] = grp[map[mi]] || []).push(mi); });
+      const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
+      if (sorted.length <= 1) continue;
+      const [majAlign, majMails] = sorted[0];
+      if (majMails.length <= presentMails.length / 2) continue;
+      for (const [al, mailIds] of sorted.slice(1)) {
+        mailIds.forEach(mi => {
+          perMail[mi].push({
+            severity: 'warn', category: '圖片對齊', imgId: id,
+            message: `圖片 <code>${escapeHtml(id)}</code> 對齊喺 <b>${vp.label}</b> 同其他唔一致：其他 <b>${majMails.length}</b> 封 <b>${VALUE_LABEL[majAlign] || majAlign}</b>，呢封 <b>${VALUE_LABEL[al] || al}</b>`,
+          });
+        });
+      }
+    }
+  }
+  return perMail;
+}
+
+// Detect image section/order shift by comparing the nearest preceding heading across mails.
+// Fall back to preceding text only before the first heading. This avoids false positives when
+// the image is in the same section but tier-specific body copy or amounts differ.
+function crossImagePositionIssues(mails, tierLabelOf) {
+  const perMail = mails.map(() => []);
+  if (mails.length < 2) return perMail;
+  const seqs = mails.map(m => extractBlockSequence(parseDom(m.html)));
+  const imgIds = new Set();
+  seqs.forEach(s => s.forEach(t => { if (t.type === 'img' && t.id && t.id !== '(inline)') imgIds.add(t.id); }));
+
+  for (const id of imgIds) {
+    // preceding text per mail (first occurrence)
+    const prevPerMail = seqs.map(s => {
+      const t = s.find(x => x.type === 'img' && x.id === id);
+      return t ? (t.prevHeading || t.prevText || '(開頭)') : null;
+    });
+    const presentMails = prevPerMail.map((p, i) => p !== null ? i : null).filter(i => i !== null);
+    if (presentMails.length <= mails.length / 2) continue;  // need majority to compare position
+    const grp = {};
+    presentMails.forEach(mi => { const k = prevPerMail[mi] || '(開頭)'; (grp[k] = grp[k] || []).push(mi); });
+    const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
+    if (sorted.length <= 1) continue;  // all same position
+    const [majPrev, majMails] = sorted[0];
+    if (majMails.length <= presentMails.length / 2) continue;  // no clear majority
+    for (const [prev, mailIds] of sorted.slice(1)) {
+      mailIds.forEach(mi => {
+        perMail[mi].push({
+          severity: 'warn', category: '跨MAIL 圖片次序', imgId: id,
+          message: `圖片 <code>${escapeHtml(id)}</code> 所屬內容可能唔同：其他 <b>${majMails.length}</b> 封放喺標題「${escapeHtml(String(majPrev).slice(0, 28))}」之下，但呢封放喺「${escapeHtml(String(prev).slice(0, 28))}」之下 — 請核對圖片次序`,
+        });
+      });
+    }
+  }
+  return perMail;
+}
+
+function rowStyleDiffs(row, styleKey = 'style') {
+  const present = row.cells.map((p, i) => p ? { p, i } : null).filter(Boolean);
+  if (present.length < 2) return [];
+  // 'align' = visual alignment (bounding-box based). Only meaningful in computed styles.
+  const keys = ['align', 'font-family', 'font-size', 'font-weight', 'line-height', 'margin', 'color', 'font-style', 'text-decoration'];
+  const diffs = [];
+  for (const k of keys) {
+    let cellVals = present.map(x => {
+      const styleObj = x.p[styleKey] || {};
+      const raw = styleObj[k] || '';
+      return { mail: x.i, raw, norm: normalizeCssValue(raw) };
+    });
+    // For 'align', empty means "couldn't determine / skipped" (multi-line text) — exclude those cells
+    if (k === 'align') {
+      cellVals = cellVals.filter(x => x.raw !== '');
+      if (cellVals.length < 2) continue;  // not enough single-line cells to compare
+    }
+    // Group cells by normalized value
+    const groups = {};
+    cellVals.forEach(x => {
+      if (!groups[x.norm]) groups[x.norm] = { norm: x.norm, raw: x.raw, mails: [] };
+      groups[x.norm].mails.push(x.mail);
+    });
+    const groupList = Object.values(groups).sort((a, b) => b.mails.length - a.mails.length);
+    if (groupList.length === 1) continue; // everyone agrees
+    const top = groupList[0];
+    const hasClearMajority = top.mails.length > cellVals.length / 2;
+    const outlierMails = hasClearMajority
+      ? cellVals.filter(x => x.norm !== top.norm).map(x => x.mail)
+      : cellVals.map(x => x.mail);
+    diffs.push({
+      key: k,
+      cellVals,                       // per-cell raw + normalized
+      groups: groupList,              // grouped by norm value
+      hasClearMajority,
+      majority: hasClearMajority ? top : null,
+      outlierMails,
+      // Back-compat for anything still reading .vals
+      vals: cellVals.map(x => ({ mail: x.mail, val: x.raw })),
+    });
+  }
+  return diffs;
+}
+
+// Majority-vote analysis for text mismatches (uses masked key)
+function rowTextAnalysis(row) {
+  const present = row.cells.map((p, i) => p ? { p, i } : null).filter(Boolean);
+  const empty = { hasClearMajority: false, majority: null, groupList: [], outlierMails: [] };
+  if (present.length < 2) return empty;
+  const groups = {};
+  present.forEach(x => {
+    if (!groups[x.p.key]) groups[x.p.key] = { key: x.p.key, text: x.p.text, mails: [] };
+    groups[x.p.key].mails.push(x.i);
+  });
+  const groupList = Object.values(groups).sort((a, b) => b.mails.length - a.mails.length);
+  if (groupList.length === 1) return empty;
+  const top = groupList[0];
+  const hasClearMajority = top.mails.length > present.length / 2;
+  const outlierMails = hasClearMajority
+    ? present.filter(x => x.p.key !== top.key).map(x => x.i)
+    : present.map(x => x.i);
+  return { hasClearMajority, majority: hasClearMajority ? top : null, groupList, outlierMails };
+}
+
+// ========================================================================
+// SINGLE-EMAIL CHECKS  (now record paraIndex)
+// ========================================================================
+function checkLanguageLink(mail, tier) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  // Find any language-toggle link (English mail has _TC.html, Chinese mail has _EN.html)
+  const langLinks = Array.from(doc.querySelectorAll('a')).filter(a => {
+    const href = a.getAttribute('href') || '';
+    return /_(?:EN|TC)\.html($|[?#])/i.test(href);
+  });
+  if (langLinks.length === 0) {
+    issues.push({
+      severity: 'err', category: '語言連結',
+      message: '搵唔到指向 <code>*_EN.html</code> 或 <code>*_TC.html</code> 嘅語言 toggle link',
+      paraIndex: findFirstParaWithText(doc, '在瀏覽器查看') ?? findFirstParaWithText(doc, 'View in browser'),
+    });
+    return issues;
+  }
+  // Extract tier from URL — pattern `_T<n>[-<n>]_` optionally followed by extra segment, then _EN/TC.html
+  const tierPattern = /_(T[0-9]+(?:-[0-9]+)?)_(?:[a-zA-Z0-9]+_)?(?:EN|TC)\.html/i;
+  let anyTierLinkFound = false;
+  for (const a of langLinks) {
+    const href = a.getAttribute('href') || '';
+    const m = href.match(tierPattern);
+    if (!m) continue;
+    anyTierLinkFound = true;
+    const linkTier = m[1].toUpperCase();
+    if (linkTier !== tier.id) {
+      issues.push({
+        severity: 'err', category: '語言連結',
+        message: `語言 toggle link tier mismatch：預期 <code>${tier.id}</code>，實際指向 <code>${linkTier}</code>`,
+        snippet: href, paraIndex: findParaContaining(doc, a),
+      });
+    }
+  }
+  if (!anyTierLinkFound) {
+    issues.push({
+      severity: 'info', category: '語言連結',
+      message: '語言 toggle link 存在但URL冇 tier code（<code>_T&lt;n&gt;_</code>），無法自動 check tier',
+    });
+  }
+  return issues;
+}
+function findFirstParaWithText(doc, needle) {
+  const paras = doc.querySelectorAll(PARA_SELECTOR);
+  let idx = 0;
+  for (const n of paras) {
+    const t = textOf(n); if (!t) continue;
+    if (t.includes(needle)) return idx;
+    idx++;
+  }
+  return null;
+}
+function findParaContaining(doc, node) {
+  const paras = Array.from(doc.querySelectorAll(PARA_SELECTOR)).filter(n => textOf(n));
+  for (let i = 0; i < paras.length; i++) {
+    if (paras[i].contains(node)) return i;
+  }
+  return null;
+}
+
+function checkWhitespace(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  extractParagraphs(doc).forEach((p, i) => {
+    // Chinese normally has no inter-word spaces. Catch even ONE ordinary space,
+    // NBSP, full-width space, tab or line break between two Han characters.
+    const cjkGapRe = /([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])([\t\n\r \u00a0\u3000]+)(?=([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]))/g;
+    const cjkGaps = Array.from(p.text.matchAll(cjkGapRe));
+    if (cjkGaps.length) {
+      const examples = [...new Set(cjkGaps.map(m => `${m[1]}␠${m[3]}`))].slice(0, 3);
+      issues.push({
+        severity: 'warn', category: '多餘空白',
+        message: `中文字之間有多餘空白：${examples.map(x => `<code>${escapeHtml(x)}</code>`).join('、')}`,
+        snippet: p.text, paraIndex: i,
+      });
+    }
+    if (/(?:&nbsp;|\s)+\s*$/.test(p.html.trim()) && /&nbsp;/.test(p.html)) {
+      issues.push({ severity: 'warn', category: '多餘空白', message: `段落尾部有多餘 <code>&amp;nbsp;</code>`, snippet: p.text, paraIndex: i });
+    }
+    if (!cjkGaps.length && / {2,}/.test(p.text)) {
+      issues.push({ severity: 'warn', category: '多餘空白', message: `段落有連續2+空格`, snippet: p.text, paraIndex: i });
+    }
+    if (/(?:&nbsp;\s*){3,}/i.test(p.html)) {
+      issues.push({ severity: 'warn', category: '多餘空白', message: `段落有連續3+個 <code>&amp;nbsp;</code>`, snippet: p.text, paraIndex: i });
+    }
+  });
+  return issues;
+}
+function checkPunctuation(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  extractParagraphs(doc).forEach((p, i) => {
+    const t = p.text;
+    if (!/[一-鿿]/.test(t)) return;
+    // Skip if paragraph contains template placeholders like {{lead.Name}} — system-managed
+    if (/\{\{[^}]+\}\}/.test(t)) return;
+    const bad = [];
+    if (/[一-鿿],[一-鿿\s]/.test(t)) bad.push('，(半形 ,)');
+    if (/[一-鿿]\.(?:[一-鿿]|$)/.test(t)) bad.push('。(半形 .)');
+    if (/[一-鿿]!/.test(t)) bad.push('！(半形 !)');
+    if (/[一-鿿]\?/.test(t)) bad.push('？(半形 ?)');
+    if (bad.length) issues.push({ severity: 'warn', category: '標點', message: `中文段落用咗半形標點：${bad.join('、')}`, snippet: t, paraIndex: i });
+    const pairs = [['「','」'], ['『','』'], ['（','）']];
+    for (const [o, c] of pairs) {
+      const oc = (t.match(new RegExp(escapeRe(o), 'g')) || []).length;
+      const cc = (t.match(new RegExp(escapeRe(c), 'g')) || []).length;
+      if (oc !== cc) issues.push({ severity: 'warn', category: '標點', message: `<code>${o}</code>×${oc} 同 <code>${c}</code>×${cc} 不對稱`, snippet: t, paraIndex: i });
+    }
+  });
+  return issues;
+}
+function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Rule: honorific — must use 您, not 你 (excluding compound word 迷你)
+function checkHonorific(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  extractParagraphs(doc).forEach((p, i) => {
+    const t = p.text;
+    if (!/[一-鿿]/.test(t)) return;
+    if (/\{\{[^}]+\}\}/.test(t)) return;  // skip template placeholders
+    // Count 你 not part of 迷你
+    const withoutMini = t.replace(/迷你/g, '');
+    const matches = withoutMini.match(/你/g);
+    if (matches && matches.length > 0) {
+      issues.push({
+        severity: 'warn', category: '稱謂',
+        message: `段落用咗「<code>你</code>」（應該用「<code>您</code>」）— 出現 ${matches.length} 次`,
+        snippet: t, paraIndex: i,
+      });
+    }
+  });
+  return issues;
+}
+
+// Rule: coupon term — should be 電子現金券, not 電子禮券
+function checkCouponTerm(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  extractParagraphs(doc).forEach((p, i) => {
+    const t = p.text;
+    const matches = t.match(/電子禮券/g);
+    if (matches && matches.length > 0) {
+      issues.push({
+        severity: 'warn', category: '術語',
+        message: `用咗「<code>電子禮券</code>」，應該統一用「<code>電子現金券</code>」— 出現 ${matches.length} 次`,
+        snippet: t, paraIndex: i,
+      });
+    }
+  });
+  return issues;
+}
+
+// Rule: money format — HK$XX 後面接中文要有空格（例：HK$50 電子現金券）；前面唔理
+function checkMoneyFormat(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  extractParagraphs(doc).forEach((p, i) => {
+    const t = p.text;
+    // BAD: HK$XX 之後接住中文，無空格
+    const after = [...t.matchAll(/HK\$\d[\d,]*(?:\.\d+)?[一-鿿]/g)];
+    if (after.length > 0) {
+      const examples = after.slice(0, 3).map(m => `<code>${m[0]}</code>`).join('、');
+      issues.push({
+        severity: 'warn', category: '金額格式',
+        message: `HK$金額 之後接住中文，需要加空格（正確：<code>HK$50 電子現金券</code>）— 發現：${examples}`,
+        snippet: t, paraIndex: i,
+      });
+    }
+  });
+  return issues;
+}
+
+// Mail type detection: email版通常有 {{system.xxx}} / {{lead.xxx}} template placeholder；網頁版冇（都 render 咗實際內容）
+function detectMailType(html) {
+  if (/\{\{(?:system|lead|my)\./i.test(html)) return 'email';
+  return 'web';
+}
+
+// Helpers: check for VISIBLE elements (a tag has text or img, paragraph has text)
+function findVisibleAnchor(doc, hrefPattern) {
+  return Array.from(doc.querySelectorAll('a')).filter(a => {
+    const href = a.getAttribute('href') || '';
+    if (!hrefPattern.test(href)) return false;
+    const text = textOf(a);
+    return text.length > 0 || a.querySelector('img');
+  });
+}
+function findEmptyAnchor(doc, hrefPattern) {
+  return Array.from(doc.querySelectorAll('a')).filter(a => {
+    const href = a.getAttribute('href') || '';
+    if (!hrefPattern.test(href)) return false;
+    return !textOf(a) && !a.querySelector('img');
+  });
+}
+function bodyText(doc) { return doc.body ? (doc.body.textContent || '').replace(/\s+/g, ' ') : ''; }
+
+// EDM (email version) should have these
+function checkEmailRequirements(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  const body = bodyText(doc);
+
+  // 1. View in browser link — must have visible "在瀏覽器查看/View in browser" anchor
+  const viewLinks = Array.from(doc.querySelectorAll('a')).filter(a => {
+    const t = textOf(a);
+    return /在瀏覽器查看|View in browser/i.test(t);
+  });
+  const hasViewMustache = /\{\{system\.viewAsWebpageLink\}\}/.test(mail.html);
+  if (viewLinks.length === 0) {
+    issues.push({
+      severity: 'err', category: '電郵必備',
+      message: `EDM缺少可見嘅「在瀏覽器查看 / View in browser」連結`,
+    });
+  } else if (!hasViewMustache) {
+    issues.push({
+      severity: 'warn', category: '電郵必備',
+      message: `「在瀏覽器查看」連結存在但無用 <code>{{system.viewAsWebpageLink}}</code> placeholder`,
+    });
+  }
+
+  // 2. Salutation — check visible body text
+  const hasSalutationCn = /您好[，,]\s*\{\{lead\./.test(body) || /您好[，,]\s*\S+.*積金易號碼/.test(body);
+  const hasSalutationEn = /Hello\s+\{\{lead\./i.test(body) || /Hello\s+\S+.*eMPF\s+ID/i.test(body);
+  const hasEmpfId = /\{\{my\.masked_empf_ID\}\}/.test(mail.html) || /(?:積金易號碼|eMPF\s+ID)\s*[:：]/i.test(body);
+  if (!hasSalutationCn && !hasSalutationEn) {
+    issues.push({
+      severity: 'err', category: '電郵必備',
+      message: `EDM缺少稱謂：應該有「您好，{{lead.Salutation}} {{lead.Last Name}}」或英文對應`,
+    });
+  }
+  if (!hasEmpfId) {
+    issues.push({
+      severity: 'err', category: '電郵必備',
+      message: `EDM缺少「積金易號碼／eMPF ID」`,
+    });
+  }
+
+  // 3. Unsubscribe — must have VISIBLE anchors
+  const optOutLinks = findVisibleAnchor(doc, /LoyaltyProgramUnsubscribeProgram_WPUnsubscribeProgram(?:EN|TC)\.html/i);
+  const allLinks = findVisibleAnchor(doc, /WP-Unsubscribe-(?:EN|TC)\.html/i);
+  const missing = [];
+  if (optOutLinks.length === 0) missing.push('「點擊此處退出 / click here to opt out」');
+  if (allLinks.length === 0) missing.push('「取消所有訂閱 / Unsubscribe all」');
+  if (missing.length > 0) {
+    issues.push({
+      severity: 'err', category: '電郵必備',
+      message: `EDM缺少可見嘅退訂連結：${missing.join('、')}`,
+    });
+  }
+  return issues;
+}
+
+// Web version should NOT have these email-only elements (only flag VISIBLE occurrences)
+function checkWebRequirements(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  const body = bodyText(doc);
+  const bad = [];
+  const noise = [];  // empty <a> with these URLs — HTML cleanup issue only
+
+  // View in browser
+  const visibleView = Array.from(doc.querySelectorAll('a')).some(a => /在瀏覽器查看|View in browser/i.test(textOf(a)));
+  const bodyHasView = /在瀏覽器查看|View in browser/i.test(body);
+  if (visibleView || bodyHasView) {
+    bad.push('「在瀏覽器查看 / View in browser」連結');
+  }
+
+  // Salutation placeholders in visible text
+  if (/\{\{lead\.(?:Salutation|Last Name)/.test(body) || /\{\{my\.masked_empf_ID\}\}/.test(body)) {
+    bad.push('稱謂 template placeholder（<code>{{lead.*}} / {{my.masked_empf_ID}}</code>）');
+  }
+
+  // Unsubscribe — only flag VISIBLE anchors
+  const unsubVisible = findVisibleAnchor(doc, /LoyaltyProgramUnsubscribeProgram|WP-Unsubscribe-/i);
+  const unsubEmpty  = findEmptyAnchor(doc, /LoyaltyProgramUnsubscribeProgram|WP-Unsubscribe-/i);
+  if (unsubVisible.length > 0) {
+    bad.push(`可見退訂連結 (${unsubVisible.length}個)`);
+  }
+  if (unsubEmpty.length > 0) {
+    noise.push(`${unsubEmpty.length} 個空 <code>&lt;a&gt;</code> tag 指向 unsubscribe URL（用戶睇唔到，但HTML source 仲有 — 建議清走）`);
+  }
+
+  if (bad.length > 0) {
+    issues.push({
+      severity: 'warn', category: '網頁版禁用',
+      message: `網頁版唔應該有：${bad.join('、')} — 呢啲係 EDM 專屬`,
+    });
+  }
+  noise.forEach(msg => {
+    issues.push({ severity: 'info', category: 'HTML雜訊', message: msg });
+  });
+  return issues;
+}
+
+function checkHtmlNoise(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  const emptyA = Array.from(doc.querySelectorAll('a')).filter(a => !textOf(a) && !a.querySelector('img'));
+  if (emptyA.length) issues.push({ severity: 'info', category: 'HTML雜訊', message: `${emptyA.length} 個空 <code>&lt;a&gt;</code> tag`, paraIndex: null });
+  const uTags = doc.querySelectorAll('u').length;
+  const underlineStyle = (mail.html.match(/text-decoration\s*:\s*underline/gi) || []).length;
+  if (uTags > 0 && underlineStyle > 0) issues.push({ severity: 'info', category: 'HTML雜訊', message: `混用咗 <code>&lt;u&gt;</code> (${uTags}個) 同 <code>text-decoration:underline</code> (${underlineStyle}處)`, paraIndex: null });
+  return issues;
+}
+
+// ========================================================================
+// APPROVED WORD (.docx) MASTER COPY
+// ========================================================================
+function wordChildElements(node, localName) {
+  return Array.from(node.children || []).filter(n => n.localName === localName);
+}
+function wordNodeText(node) {
+  let out = '';
+  const walk = n => {
+    if (n.nodeType === 1 && n.localName === 'del') return; // rejected/deleted tracked copy
+    if (n.nodeType === 1 && n.localName === 't') { out += n.textContent || ''; return; }
+    if (n.nodeType === 1 && n.localName === 'tab') { out += ' '; return; }
+    if (n.nodeType === 1 && (n.localName === 'br' || n.localName === 'cr')) { out += '\n'; return; }
+    Array.from(n.childNodes || []).forEach(walk);
+  };
+  walk(node);
+  return out.replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').trim();
+}
+function wordTableMatrix(tbl) {
+  return wordChildElements(tbl, 'tr').map(tr => wordChildElements(tr, 'tc').map(tc => {
+    const paras = Array.from(tc.getElementsByTagNameNS('*', 'p'));
+    return paras.map(wordNodeText).filter(Boolean);
+  }));
+}
+async function readDocxZipEntry(file, wantedName) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('DOCX ZIP 結構無效');
+  const total = view.getUint16(eocd + 10, true);
+  let cursor = view.getUint32(eocd + 16, true);
+  const decoder = new TextDecoder('utf-8');
+  for (let i = 0; i < total; i++) {
+    if (view.getUint32(cursor, true) !== 0x02014b50) throw new Error('DOCX central directory 無效');
+    const method = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const nameLen = view.getUint16(cursor + 28, true);
+    const extraLen = view.getUint16(cursor + 30, true);
+    const commentLen = view.getUint16(cursor + 32, true);
+    const localOffset = view.getUint32(cursor + 42, true);
+    const name = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLen));
+    if (name === wantedName) {
+      if (view.getUint32(localOffset, true) !== 0x04034b50) throw new Error('DOCX local entry 無效');
+      const localNameLen = view.getUint16(localOffset + 26, true);
+      const localExtraLen = view.getUint16(localOffset + 28, true);
+      const start = localOffset + 30 + localNameLen + localExtraLen;
+      const packed = bytes.slice(start, start + compressedSize);
+      if (method === 0) return decoder.decode(packed);
+      if (method !== 8 || typeof DecompressionStream === 'undefined') throw new Error('瀏覽器唔支援呢種 DOCX 壓縮格式');
+      const stream = new Blob([packed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return decoder.decode(new Uint8Array(await new Response(stream).arrayBuffer()));
+    }
+    cursor += 46 + nameLen + extraLen + commentLen;
+  }
+  throw new Error('DOCX 缺少 word/document.xml');
+}
+function detectTierPrizeTable(matrices) {
+  const prizes = {};
+  matrices.forEach(matrix => {
+    if (!matrix.length || matrix[0].length < 3) return;
+    const headers = matrix[0].map(cell => cell.join(' ').trim());
+    const tierCol = headers.findIndex(x => /tier|會籍|級別/i.test(x));
+    const tcCol = headers.findIndex(x => /^(?:tc|中文)|tc.*獎品|獎品.*tc/i.test(x));
+    const enCol = headers.findIndex(x => /^(?:en|english)|en.*(?:prize|reward)|(?:prize|reward).*en/i.test(x));
+    if (tierCol < 0 || (tcCol < 0 && enCol < 0)) return;
+    matrix.slice(1).forEach(row => {
+      const rawTier = (row[tierCol] || []).join(' ');
+      const match = rawTier.match(/T[0-6](?:-[0-6])?/i);
+      if (!match) return;
+      const tier = match[0].toUpperCase();
+      prizes[tier] = {
+        TC: tcCol >= 0 ? (row[tcCol] || []).join(' ').trim() : '',
+        EN: enCol >= 0 ? (row[enCol] || []).join(' ').trim() : '',
+      };
+    });
+  });
+  return prizes;
+}
+async function parseApprovedWord(file) {
+  const xmlText = await readDocxZipEntry(file, 'word/document.xml');
+  const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+  if (xml.querySelector('parsererror')) throw new Error('Word XML 無法解析');
+  const matrices = Array.from(xml.getElementsByTagNameNS('*', 'tbl')).map(wordTableMatrix);
+  const bilingual = matrices.find(matrix => {
+    if (!matrix.length || matrix[0].length < 2) return false;
+    const a = (matrix[0][0] || []).join(' ').trim().toUpperCase();
+    const b = (matrix[0][1] || []).join(' ').trim().toUpperCase();
+    return a === 'TC' && b === 'EN';
+  });
+  if (!bilingual) throw new Error('搵唔到以 TC／EN 做表頭嘅 EDM 文案表格');
+  const collectColumn = col => bilingual.slice(1).flatMap(row => (row[col] || []))
+    .flatMap(text => text.split(/\n+/)).map(text => text.trim()).filter(Boolean);
+  const tc = collectColumn(0), en = collectColumn(1);
+  const inserted = xml.getElementsByTagNameNS('*', 'ins').length;
+  const deleted = xml.getElementsByTagNameNS('*', 'del').length;
+  const highlights = xml.getElementsByTagNameNS('*', 'highlight').length;
+  return { name: file.name, tc, en, tierPrizes: detectTierPrizeTable(matrices), meta: { inserted, deleted, highlights } };
+}
+function isDynamicMasterSegment(text) {
+  return /(?:XXX|Dear\s+Sir\/?Madam|\{\{|WhatsApp|@[a-z0-9.-]+\.[a-z]{2,}|Chen\s+Manqi|\b(?:\+?852\s*)?\d{4}\s*\d{4}\b)/i.test(text);
+}
+function cleanMasterSegment(text) {
+  return String(text || '').replace(/\[button\]/gi, '').replace(/【\s*button\s*】/gi, '')
+    .replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function compactCopy(text) {
+  return cleanMasterSegment(text)
+    .replace(/[☐☑✓✔]/g, '')
+    .replace(/[【】]/g, '')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/\s+/g, '');
+}
+function wordExactKey(text, lang) {
+  let value = cleanMasterSegment(text)
+    .replace(/[☐☑✓✔]/g, '')
+    .replace(/[【】]/g, '')
+    .replace(/[\u200b-\u200d\ufeff]/g, '');
+  if (lang === 'TC') {
+    // Formatting whitespace can be ignored, but whitespace BETWEEN Chinese characters is copy.
+    // Preserve it as a marker before removing all remaining layout whitespace.
+    value = value.replace(/([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])[\t\n\r \u00a0\u3000]+(?=([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]))/g, '$1⟨CJKSPACE⟩');
+  }
+  return value.replace(/\s+/g, '');
+}
+function looseCopyKey(text) {
+  return maskTierVariables(cleanMasterSegment(text)).toLowerCase()
+    .replace(/[\s\p{P}\p{S}]/gu, '');
+}
+function detectCopyLanguage(mail) {
+  const text = textOf(parseDom(mail.html).body || parseDom(mail.html).documentElement);
+  const cjk = (text.match(/[\u3400-\u9fff]/g) || []).length;
+  const latin = (text.match(/[A-Za-z]/g) || []).length;
+  return cjk > Math.max(12, latin * 0.18) ? 'TC' : 'EN';
+}
+function checkApprovedWordCopy(mail, tierId, master) {
+  if (!master) return [];
+  const lang = detectCopyLanguage(mail);
+  const source = lang === 'TC' ? master.tc : master.en;
+  const masterSegments = [...new Set(source.map(cleanMasterSegment))]
+    .filter(text => text.length >= 8 && !isDynamicMasterSegment(text) && !/^[\d\s☐☑✓✔•|+()*_.-]+$/.test(text));
+  const emailDoc = parseDom(mail.html);
+  const emailParas = extractParagraphs(emailDoc);
+  // Existence check uses the whole rendered body text because EDM checklist/CTA copy is
+  // often placed directly in <td>/<a>/<span>, outside the paragraph selector used for annotations.
+  const emailFullText = `${mail.subject || ''} ${textOf(emailDoc.body || emailDoc.documentElement)}`;
+  const emailExact = wordExactKey(emailFullText, lang);
+  const emailCompact = compactCopy(emailFullText);
+  const windows = [];
+  for (let start = 0; start < emailParas.length; start++) {
+    for (let size = 1; size <= 3 && start + size <= emailParas.length; size++) {
+      windows.push({ start, text: emailParas.slice(start, start + size).map(p => p.text).join(' ') });
+    }
+  }
+  const issues = [];
+  masterSegments.forEach(expected => {
+    const expectedExact = wordExactKey(expected, lang);
+    if (!expectedExact || emailExact.includes(expectedExact)) return;
+    const target = looseCopyKey(expected);
+    let best = { score: 0, start: null, text: '' };
+    windows.forEach(win => {
+      const score = similarity(target, looseCopyKey(win.text));
+      if (score > best.score) best = { score, start: win.start, text: win.text };
+    });
+    if (best.score >= 0.58) {
+      issues.push({
+        severity: 'warn', category: 'Word文案不一致', paraIndex: best.start,
+        message: `<b>${lang}</b> approved Word 同 Email 文字有差異<div class="ecm-file-list"><div class="ecm-file-card"><span class="ecm-file-label">📘 Word</span><span class="ecm-file-value-text">${escapeHtml(expected)}</span></div><div class="ecm-file-card"><span class="ecm-file-label">📧 Email</span><span class="ecm-file-value-text">${escapeHtml(best.text)}</span></div></div>`,
+      });
+    } else {
+      issues.push({
+        severity: 'warn', category: 'Word文案缺少',
+        message: `<b>${lang}</b> approved Word 有呢段，但 Email 搵唔到對應內容<div class="ecm-snippet">${escapeHtml(expected)}</div>`,
+      });
+    }
+  });
+  const expectedPrize = master.tierPrizes[tierId] && master.tierPrizes[tierId][lang];
+  if (expectedPrize) {
+    const body = emailCompact;
+    if (!body.includes(compactCopy(expectedPrize))) {
+      const wrong = Object.entries(master.tierPrizes).find(([otherTier, value]) =>
+        otherTier !== tierId && value[lang] && body.includes(compactCopy(value[lang]))
+      );
+      issues.push({
+        severity: 'err', category: 'Word Tier獎品',
+        message: wrong
+          ? `呢封係 <b>${escapeHtml(tierId)}</b>，但搵到 <b>${escapeHtml(wrong[0])}</b> 獎品「${escapeHtml(wrong[1][lang])}」；Word 預期係「${escapeHtml(expectedPrize)}」`
+          : `呢封係 <b>${escapeHtml(tierId)}</b>，Word 預期獎品「${escapeHtml(expectedPrize)}」，Email 內搵唔到`,
+      });
+    }
+  }
+  return issues;
+}
+
+// ========================================================================
+// STATE
+// ========================================================================
+const state = {
+  files: [],                 // { file, parsed, tier, autoGuessed }
+  filter: 'issues',          // for overview table
+  activeTab: 'overview',
+  previewMailIdx: 0,
+  previewWidth: 'full',      // 'full' | '768' | '375'
+  lastResult: null,          // populated on runChecks
+  wordMaster: null,          // optional approved DOCX master; no effect when absent
+};
+
+// ========================================================================
+// UI: TAB SWITCHING
+// ========================================================================
+document.querySelectorAll('.app-tabs button').forEach(btn => {
+  btn.onclick = () => {
+    if (btn.disabled) return;
+    const tab = btn.dataset.tab;
+    state.activeTab = tab;
+    document.querySelectorAll('.app-tabs button').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
+    if (tab === 'preview' && state.lastResult) renderPreview();
+  };
+});
+
+// ========================================================================
+// UI: DROP + FILE LIST
+// ========================================================================
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const filesEl = document.getElementById('files');
+const runBtn = document.getElementById('runBtn');
+const clearBtn = document.getElementById('clearBtn');
+const reportContainer = document.getElementById('reportContainer');
+const wordInput = document.getElementById('wordInput');
+const wordBtn = document.getElementById('wordBtn');
+const wordStatus = document.getElementById('wordStatus');
+const wordRemoveBtn = document.getElementById('wordRemoveBtn');
+
+function renderWordMasterStatus() {
+  const master = state.wordMaster;
+  if (!master) {
+    wordStatus.innerHTML = '可選：加入 Word 後額外比對 TC／EN approved copy；唔加入時舊規則完全不變。';
+    wordRemoveBtn.hidden = true;
+    return;
+  }
+  const tiers = Object.keys(master.tierPrizes);
+  wordStatus.innerHTML = `<span class="master-ok">✓ Approved Word 已載入</span> · <b>${escapeHtml(master.name)}</b><br>` +
+    `EDM master：TC ${master.tc.length} 段／EN ${master.en.length} 段 · ` +
+    (tiers.length ? `Tier獎品：${tiers.map(escapeHtml).join('、')}` : '未偵測到 Tier 獎品表（只做文案比較）') +
+    ` · 修訂：+${master.meta.inserted}/−${master.meta.deleted}`;
+  wordRemoveBtn.hidden = false;
+}
+wordBtn.onclick = () => { wordInput.value = ''; wordInput.click(); };
+wordInput.onchange = async e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  wordStatus.textContent = '⏳ 解析 Word approved copy…';
+  try {
+    state.wordMaster = await parseApprovedWord(file);
+    state.lastResult = null;
+    reportContainer.innerHTML = '';
+    document.querySelector('[data-tab="preview"]').disabled = true;
+  } catch (err) {
+    state.wordMaster = null;
+    alert('無法讀取 approved Word：' + err.message);
+  }
+  renderWordMasterStatus();
+};
+wordRemoveBtn.onclick = () => {
+  state.wordMaster = null;
+  state.lastResult = null;
+  reportContainer.innerHTML = '';
+  document.querySelector('[data-tab="preview"]').disabled = true;
+  renderWordMasterStatus();
+};
+
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('hover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('hover'));
+drop.addEventListener('drop', async e => {
+  e.preventDefault();
+  drop.classList.remove('hover');
+  const items = Array.from(e.dataTransfer.items || []);
+  const entries = items.map(item => item.webkitGetAsEntry ? item.webkitGetAsEntry() : null).filter(Boolean);
+  if (entries.some(entry => entry.isDirectory)) {
+    try {
+      const nested = await Promise.all(entries.map(entry => readDroppedEntry(entry)));
+      await handleFolder(nested.flat(Infinity));
+    } catch (err) {
+      alert('無法讀取拖入嘅資料夾：' + err.message);
+    }
+    return;
+  }
+  await handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+const urlInput = document.getElementById('urlInput');
+const urlAddBtn = document.getElementById('urlAddBtn');
+urlAddBtn.onclick = async () => {
+  urlAddBtn.disabled = true; urlAddBtn.textContent = '⏳ Fetching...';
+  try { await addFromUrl(urlInput.value); urlInput.value = ''; }
+  finally { urlAddBtn.disabled = false; urlAddBtn.innerHTML = '🌐 加入 URL'; }
+};
+urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') urlAddBtn.click(); });
+
+// Folder upload (webkitdirectory)
+const folderInput = document.getElementById('folderInput');
+const folderBtn = document.getElementById('folderBtn');
+folderBtn.addEventListener('click', () => {
+  folderInput.value = '';
+  folderInput.click();
+});
+folderInput.addEventListener('change', async e => {
+  await handleFolder(e.target.files);
+  e.target.value = '';
+});
+
+// Recursively read a directory dropped from Finder/Explorer. Files obtained from
+// FileSystemEntry do not carry webkitRelativePath, so preserve it explicitly for
+// resolveAsset() and the existing three-pass folder asset rewrite.
+async function readDroppedEntry(entry, parentPath = '') {
+  const relativePath = parentPath ? parentPath + '/' + entry.name : entry.name;
+  if (entry.isFile) {
+    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+    try {
+      Object.defineProperty(file, 'webkitRelativePath', { value: relativePath, configurable: true });
+      return file;
+    } catch (_) {
+      const copy = new File([file], file.name, { type: file.type, lastModified: file.lastModified });
+      Object.defineProperty(copy, 'webkitRelativePath', { value: relativePath });
+      return copy;
+    }
+  }
+  if (!entry.isDirectory) return [];
+  const reader = entry.createReader();
+  const children = [];
+  while (true) {
+    const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+    if (!batch.length) break;
+    children.push(...batch);
+  }
+  const nested = await Promise.all(children.map(child => readDroppedEntry(child, relativePath)));
+  return nested.flat(Infinity);
+}
+
+async function handleFolder(fileList) {
+  const files = Array.from(fileList);
+  if (files.length === 0) return;
+  const htmlFiles = files.filter(f => /\.(?:html?|xml)$/i.test(f.name));
+  const cssFiles  = files.filter(f => /\.css$/i.test(f.name));
+  const otherFiles = files.filter(f => !htmlFiles.includes(f) && !cssFiles.includes(f));
+  if (htmlFiles.length === 0) { alert('資料夾入面搵唔到 .html / .xml 檔案'); return; }
+
+  const assetMap = new Map();
+  const addToMap = (relPath, url) => {
+    assetMap.set(relPath, url);
+    const stripped = relPath.split('/').slice(1).join('/');
+    if (stripped) assetMap.set(stripped, url);
+    assetMap.set(relPath.split('/').pop(), url);
+  };
+
+  // Pass 1: build blob URLs for images, fonts, JS — anything non-CSS/HTML
+  for (const f of otherFiles) {
+    const blob = new Blob([await f.arrayBuffer()], { type: f.type || guessMime(f.name) });
+    addToMap(f.webkitRelativePath || f.name, URL.createObjectURL(blob));
+  }
+
+  // Pass 2: for each CSS, rewrite url() inside to blob URLs (relative to that CSS file), then blob the CSS
+  for (const cssFile of cssFiles) {
+    const cssText = await cssFile.text();
+    const cssRel = cssFile.webkitRelativePath || cssFile.name;
+    const cssDir = cssRel.split('/').slice(0, -1).join('/');
+    const rewritten = cssText.replace(/url\((['"]?)([^)'"]+)\1\)/gi, (full, q, src) => {
+      const newUrl = resolveAsset(src, cssDir, assetMap);
+      return newUrl ? `url(${q}${newUrl}${q})` : full;
+    });
+    const blob = new Blob([rewritten], { type: 'text/css' });
+    addToMap(cssRel, URL.createObjectURL(blob));
+  }
+
+  // Pass 3: rewrite HTML files' src/href/url()
+  for (const htmlFile of htmlFiles) {
+    const sourceText = await htmlFile.text();
+    const text = /\.xml$/i.test(htmlFile.name) ? extractHtmlFromXml(sourceText) : sourceText;
+    if (/\.xml$/i.test(htmlFile.name) && !/<(?:html|body|table|div|p|img|style|link)\b/i.test(text)) continue;
+    const rewritten = rewriteAssets(text, assetMap, htmlFile);
+    const parsed = { fileName: htmlFile.name, subject: `[Folder] ${htmlFile.name}`, html: rewritten };
+    addToState({ name: htmlFile.name }, parsed);
+  }
+  renderFiles();
+}
+
+// Resolve a relative URL against a currentDir into an assetMap blob URL
+function resolveAsset(src, currentDir, assetMap) {
+  if (!src || /^(https?:|data:|blob:|#|\/\/|mailto:|javascript:)/i.test(src)) return null;
+  // Clean src: strip fragment/query for lookup
+  const cleanSrc = src.split('#')[0].split('?')[0];
+  const candidates = [cleanSrc, cleanSrc.replace(/^\.\//, ''), cleanSrc.split('/').pop()];
+  // Resolve against currentDir including '..' handling
+  if (currentDir) {
+    let dir = currentDir, path = cleanSrc;
+    while (path.startsWith('../')) { path = path.slice(3); dir = dir.split('/').slice(0, -1).join('/'); }
+    path = path.replace(/^\.\//, '');
+    candidates.push(dir ? dir + '/' + path : path);
+    candidates.push(currentDir + '/' + cleanSrc);
+  }
+  for (const key of candidates) if (assetMap.has(key)) return assetMap.get(key);
+  for (const key of candidates) {
+    try { const dec = decodeURIComponent(key); if (assetMap.has(dec)) return assetMap.get(dec); } catch(e){}
+  }
+  return null;
+}
+
+function rewriteAssets(html, assetMap, htmlFile) {
+  const htmlRelPath = htmlFile.webkitRelativePath || htmlFile.name;
+  const htmlDir = htmlRelPath.split('/').slice(0, -1).join('/');
+  const rewriteUrl = (src) => resolveAsset(src, htmlDir, assetMap);
+  // Preserve original image filename before src gets rewritten to blob: (so image identity survives)
+  let out = html.replace(/<img\b([^>]*?)\bsrc=(["'])([^"']+)\2([^>]*)>/gi, (full, pre, q, src, post) => {
+    if (/data-ecm-orig=/i.test(full)) return full;
+    const base = src.split('#')[0].split('?')[0].split('/').pop().replace(/"/g, '');
+    return `<img${pre}src=${q}${src}${q} data-ecm-orig="${base}"${post}>`;
+  });
+  out = out.replace(/\b(src|href)=(["'])([^"']+)\2/gi, (full, attr, q, src) => {
+    const newUrl = rewriteUrl(src);
+    return newUrl ? `${attr}=${q}${newUrl}${q}` : full;
+  });
+  out = out.replace(/url\((['"]?)([^)'"]+)\1\)/gi, (full, q, src) => {
+    const newUrl = rewriteUrl(src);
+    return newUrl ? `url(${q}${newUrl}${q})` : full;
+  });
+  return out;
+}
+
+function guessMime(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return ({
+    png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif',
+    svg:'image/svg+xml', webp:'image/webp', ico:'image/x-icon', bmp:'image/bmp',
+    css:'text/css', js:'text/javascript', woff:'font/woff', woff2:'font/woff2',
+    ttf:'font/ttf', otf:'font/otf', eot:'application/vnd.ms-fontobject',
+  })[ext] || 'application/octet-stream';
+}
+clearBtn.onclick = () => { state.files = []; state.wordMaster = null; state.lastResult = null; renderFiles(); renderWordMasterStatus(); reportContainer.innerHTML = ''; document.querySelector('[data-tab="preview"]').disabled = true; };
+runBtn.onclick = () => runChecks();
+
+async function handleFiles(fileList) {
+  for (const file of fileList) {
+    try {
+      const parsed = await parseEmlFile(file);
+      addToState(file, parsed);
+    } catch (err) { alert('無法讀取 ' + file.name + '：' + err.message); }
+  }
+  renderFiles();
+}
+
+function addToState(file, parsed, sourceUrl) {
+  let guess = null;
+  const m = parsed.html && parsed.html.match(/_(T[0-9]+(?:-[0-9]+)?)_(?:[a-zA-Z0-9]+_)?(?:EN|TC)\.html/i);
+  if (m) guess = m[1].toUpperCase();
+  const mailType = detectMailType(parsed.html);
+  state.files.push({
+    file, parsed,
+    tier: guess || 'T1-2', autoGuessed: !!guess,
+    mailType,
+    autoGuessedType: true,
+    sourceUrl,
+  });
+}
+
+async function addFromUrl(url) {
+  const clean = url.trim();
+  if (!clean) return;
+  const attempts = [
+    { name: 'direct', fetch: () => fetch(clean, { redirect: 'follow' }) },
+    { name: 'corsproxy.io', fetch: () => fetch('https://corsproxy.io/?' + encodeURIComponent(clean)) },
+    { name: 'allorigins', fetch: async () => {
+      const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(clean));
+      const json = await r.json();
+      return { ok: !!json.contents, text: async () => json.contents };
+    }},
+  ];
+  let html = null, lastErr = null;
+  for (const a of attempts) {
+    try {
+      const r = await a.fetch();
+      if (!r.ok) continue;
+      const t = await r.text();
+      if (t && t.length > 100) { html = t; break; }
+    } catch (e) { lastErr = e; }
+  }
+  if (!html) {
+    alert('無法fetch URL — 可能係 CORS 或 network 問題。\n\n可以改為：\n1. 喺 browser 打開個網頁，view-source（Cmd+Option+U）→ Save Page As → drag入嚟\n2. 或者直接下載 .eml / .html file');
+    return;
+  }
+  // Extract filename from URL path
+  let name;
+  try { name = new URL(clean).pathname.split('/').pop() || 'url'; }
+  catch { name = 'url'; }
+  const parsed = { fileName: name, subject: `[URL] ${clean}`, html };
+  addToState({ name }, parsed, clean);
+  renderFiles();
+}
+
+function renderFiles() {
+  filesEl.innerHTML = '';
+  state.files.forEach((row, i) => {
+    const div = document.createElement('div');
+    div.className = 'file-row';
+    const pillCls = row.autoGuessed ? 'auto' : 'manual';
+    const pillText = row.autoGuessed ? '自動 ✓' : '手動';
+    const icon = row.sourceUrl ? '🌐' : '📧';
+    const subText = row.sourceUrl ? row.sourceUrl : row.parsed.subject;
+    div.innerHTML = `
+      <div class="icon">${icon}</div>
+      <div class="name" title="${escapeHtml(subText)}">${escapeHtml(row.file.name)}<div class="sub">${escapeHtml(subText)}</div></div>
+      <select data-idx="${i}" data-kind="tier">${TIERS.map(t => `<option value="${t.id}" ${t.id === row.tier ? 'selected' : ''}>${t.label}</option>`).join('')}</select>
+      <select data-idx="${i}" data-kind="type">
+        <option value="email" ${row.mailType === 'email' ? 'selected' : ''}>📧 EDM 電郵</option>
+        <option value="web" ${row.mailType === 'web' ? 'selected' : ''}>🌐 網頁版</option>
+      </select>
+      <span class="pill ${pillCls}">${pillText}</span>
+      <button class="del" data-del="${i}" title="移除">×</button>
+    `;
+    filesEl.appendChild(div);
+  });
+  filesEl.querySelectorAll('select').forEach(sel => {
+    sel.onchange = e => {
+      const idx = +e.target.dataset.idx;
+      const kind = e.target.dataset.kind;
+      if (kind === 'tier') {
+        state.files[idx].tier = e.target.value;
+        state.files[idx].autoGuessed = false;
+      } else if (kind === 'type') {
+        state.files[idx].mailType = e.target.value;
+        state.files[idx].autoGuessedType = false;
+      }
+      renderFiles();
+    };
+  });
+  filesEl.querySelectorAll('button[data-del]').forEach(btn => { btn.onclick = e => { state.files.splice(+e.target.dataset.del, 1); renderFiles(); }; });
+  runBtn.disabled = state.files.length === 0;
+  clearBtn.disabled = state.files.length === 0;
+}
+
+// ========================================================================
+// RUN CHECKS
+// ========================================================================
+async function runChecks() {
+  reportContainer.innerHTML = '<div class="empty">⏳ 計算中… <div style="font-size:11px;margin-top:6px;">rendering styles at Mobile 375 + Desktop 1200 viewports</div></div>';
+  const sorted = [...state.files].sort((a, b) => (TIER_BY_ID[a.tier]?.order ?? 99) - (TIER_BY_ID[b.tier]?.order ?? 99));
+  const mails = sorted.map(r => r.parsed);
+  const tiers = sorted.map(r => TIER_BY_ID[r.tier]);
+  const fileNames = sorted.map(r => r.file.name);
+
+  // Compute REAL styles at 2 viewports (mobile + desktop) via iframe render.
+  // This captures <style> block + @media queries + inheritance — not just inline styles.
+  for (const m of mails) {
+    if (!m.layoutMobile)  m.layoutMobile  = await computeParagraphStyles(m, 375);
+    if (!m.layoutDesktop) m.layoutDesktop = await computeParagraphStyles(m, 1200);
+    m.computedMobile  = m.layoutMobile.paras;
+    m.computedDesktop = m.layoutDesktop.paras;
+  }
+  await new Promise(r => setTimeout(r, 30));
+
+    const singlePerMail = sorted.map(row => {
+      const tier = TIER_BY_ID[row.tier];
+      const mailType = row.mailType || detectMailType(row.parsed.html);
+      const typeChecks = mailType === 'email'
+        ? checkEmailRequirements(row.parsed)
+        : checkWebRequirements(row.parsed);
+      return [
+        ...typeChecks,
+        ...checkLanguageLink(row.parsed, tier),
+        ...checkWhitespace(row.parsed),
+        ...checkPunctuation(row.parsed),
+        ...checkHonorific(row.parsed),
+        ...checkCouponTerm(row.parsed),
+        ...checkMoneyFormat(row.parsed),
+        ...checkIntraMailIconConsistency(row.parsed),
+        ...checkHtmlNoise(row.parsed),
+        ...checkApprovedWordCopy(row.parsed, row.tier, state.wordMaster),
+      ];
+    });
+
+    // Cross-mail image comparison (per-mail issues)
+    const tierLabelOf = (i) => (tiers[i] ? tiers[i].id : `MAIL#${i+1}`) + ' MAIL';
+    const imgIssuesPerMail = mails.length >= 2 ? crossImageIssues(mails, tierLabelOf) : mails.map(() => []);
+    imgIssuesPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+    const imgPosPerMail = mails.length >= 2 ? crossImagePositionIssues(mails, tierLabelOf) : mails.map(() => []);
+    imgPosPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+    const imgAlignPerMail = mails.length >= 2 ? crossImageAlignIssues(mails, tierLabelOf) : mails.map(() => []);
+    imgAlignPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+
+    const alignment = mails.length >= 2 ? buildAlignmentRows(mails) : { rows: [], lists: [] };
+    const rows = alignment.rows;
+    // Attach per-viewport computed styles to each cell paragraph
+    rows.forEach(r => {
+      r.cells.forEach((cell, mi) => {
+        if (!cell) return;
+        cell.styleMobile  = (mails[mi].computedMobile  || [])[cell.index] || {};
+        cell.styleDesktop = (mails[mi].computedDesktop || [])[cell.index] || {};
+      });
+    });
+    const stats = { identical: 0, variant: 0, mismatch: 0, tieronly: 0, gift: 0 };
+    rows.forEach(r => {
+      stats[r.kind] = (stats[r.kind] || 0) + 1;
+      r.styleDiffs        = rowStyleDiffs(r, 'style');         // inline styles (fallback)
+      r.styleDiffsMobile  = rowStyleDiffs(r, 'styleMobile');   // computed @ 375
+      r.styleDiffsDesktop = rowStyleDiffs(r, 'styleDesktop');  // computed @ 1200
+      r.textAnalysis = rowTextAnalysis(r);
+    });
+    const styleDiffRowCount = rows.filter(r =>
+      (r.styleDiffsMobile.length > 0 || r.styleDiffsDesktop.length > 0)
+      && r.kind !== 'tieronly' && r.kind !== 'gift'
+    ).length;
+
+    // Build per-mail per-paragraph annotation map from rows + single-issues
+    // Skip 'variant' — it's expected (only differs in HK$ / tier name); would create noise.
+    const perMailAnnotations = mails.map(() => new Map());
+    const perMailImgAnnotations = mails.map(() => new Map());  // keyed by image domIndex
+    // Short "TX MAIL" label instead of long filename
+    const tierLabel = (i) => (tiers[i] ? tiers[i].id : `MAIL#${i+1}`) + ' MAIL';
+    // Resolve an image id to its first DOM index in this mail's rendered layout
+    const imgIdToIndex = (mi, id) => {
+      const imgs = (mails[mi].layoutDesktop && mails[mi].layoutDesktop.images) || (mails[mi].layoutMobile && mails[mi].layoutMobile.images) || [];
+      const found = imgs.find(im => im.id === id);
+      return found ? found.domIndex : null;
+    };
+    for (let mi = 0; mi < mails.length; mi++) {
+      const anno = perMailAnnotations[mi];
+      rows.forEach(row => {
+        const cell = row.cells[mi];
+        if (!cell) return;
+        const paraIdx = cell.index;
+        const styleDiffs = row.styleDiffs || [];
+        const items = [];
+        if (row.kind === 'mismatch') {
+          const ta = row.textAnalysis;
+          // Only annotate outlier cells (majority mails don't get the memo)
+          if (ta.outlierMails.includes(mi)) {
+            const thisCell = row.cells[mi];
+            let body;
+            if (ta.hasClearMajority) {
+              body = `呢段內容同其他 <b>${ta.majority.mails.length}</b> 封MAIL唔一致（已遮走 tier 變數，仍然唔同）：<div class="ecm-file-list">
+                <div class="ecm-file-card" style="background: rgba(76,175,80,.08) !important; border-left: 3px solid #43a047 !important;">
+                  <span class="ecm-file-label" style="color: #2e7d32 !important;">✓ 其他 ${ta.majority.mails.length} 封MAIL係</span>
+                  <div class="ecm-file-value-text">${escapeHtml(ta.majority.text.substring(0, 200))}${ta.majority.text.length > 200 ? '…' : ''}</div>
+                </div>
+                <div class="ecm-file-card" style="background: rgba(229,57,53,.06) !important; border-left: 3px solid #e53935 !important;">
+                  <span class="ecm-file-label" style="color: #c62828 !important;">✗ 呢封 (${escapeHtml(tierLabel(mi))}) 係</span>
+                  <div class="ecm-file-value-text">${escapeHtml(thisCell.text.substring(0, 200))}${thisCell.text.length > 200 ? '…' : ''}</div>
+                </div>
+              </div>`;
+            } else {
+              body = `呢段內容喺各封MAIL都唔同（無majority）：<div class="ecm-file-list">` + ta.groupList.map(g => `
+                <div class="ecm-file-card">
+                  <span class="ecm-file-label">${g.mails.length} 封 · ${g.mails.map(m => escapeHtml(tierLabel(m))).join('、')}</span>
+                  <div class="ecm-file-value-text">${escapeHtml(g.text.substring(0, 200))}${g.text.length > 200 ? '…' : ''}</div>
+                </div>`).join('') + '</div>';
+            }
+            items.push({ severity: 'err', title: '真·不一致（跨MAIL）', body });
+          }
+        } else if (row.kind === 'tieronly') {
+          // Only annotate if THIS mail is in the minority (few mails have this paragraph)
+          // If majority has it and only a few are missing — skip annotation (avoid noise)
+          const presentIdx = row.cells.map((c, i) => c ? i : null).filter(i => i !== null);
+          const missingCount = row.cells.length - presentIdx.length;
+          if (presentIdx.length <= missingCount) {
+            const otherPresent = presentIdx.filter(i => i !== mi);
+            items.push({
+              severity: 'info',
+              title: 'Tier 專屬段落（正常）',
+              body: otherPresent.length === 0
+                ? `呢段只喺 <b>${escapeHtml(tierLabel(mi))}</b> 出現，其他 ${missingCount} 封 MAIL 冇對應段落。`
+                : `呢段只喺 ${presentIdx.length} 封 MAIL 出現（<b>${presentIdx.map(m => escapeHtml(tierLabel(m))).join('、')}</b>），其他 ${missingCount} 封 MAIL 冇。`,
+            });
+          }
+          // else: majority has it → don't annotate. Overview table still shows tieronly badge.
+        }
+        // gift kind: skip annotation (expected variance, avoid noise)
+        // Skip style diffs for gift rows (different tier = different products with different inline styles, expected)
+        if (row.kind !== 'gift') {
+          // Combine style diffs from mobile + desktop into one memo per (viewport, key)
+          const buildStyleMemo = (d, viewportLabel, cellStyleKey) => {
+            if (!d.outlierMails.includes(mi)) return null;
+            const label = STYLE_KEY_LABEL[d.key] || d.key;
+            const thisRaw = (row.cells[mi][cellStyleKey] || {})[d.key] || '';
+            const fmt = (v) => escapeHtml(styleValLabel(d.key, v) || '(未設定)');
+            let body;
+            if (d.hasClearMajority) {
+              body = `呢段嘅 <b>${label}</b> 喺 <b>${viewportLabel}</b> 同其他 <b>${d.majority.mails.length}</b> 封MAIL唔一致：<div class="ecm-file-list">
+                <div class="ecm-file-card" style="background: rgba(76,175,80,.08) !important; border-left: 3px solid #43a047 !important;">
+                  <span class="ecm-file-label" style="color: #2e7d32 !important;">✓ 其他 ${d.majority.mails.length} 封MAIL</span>
+                  <span class="ecm-file-value">${fmt(d.majority.raw)}</span>
+                </div>
+                <div class="ecm-file-card" style="background: rgba(229,57,53,.06) !important; border-left: 3px solid #e53935 !important;">
+                  <span class="ecm-file-label" style="color: #c62828 !important;">✗ 呢封 (${escapeHtml(tierLabel(mi))})</span>
+                  <span class="ecm-file-value">${fmt(thisRaw)}</span>
+                </div>
+              </div>`;
+            } else {
+              body = `呢段嘅 <b>${label}</b> 喺 <b>${viewportLabel}</b> 各封MAIL都唔同：<div class="ecm-file-list">` + d.groups.map(g => `
+                <div class="ecm-file-card">
+                  <span class="ecm-file-label">${g.mails.length} 封 · ${g.mails.map(m => escapeHtml(tierLabel(m))).join('、')}</span>
+                  <span class="ecm-file-value">${fmt(g.raw)}</span>
+                </div>`).join('') + '</div>';
+            }
+            return { severity: 'warn', title: `${viewportLabel} · ${label}`, body };
+          };
+          (row.styleDiffsMobile || []).forEach(d => {
+            const memo = buildStyleMemo(d, '📱 Mobile 375', 'styleMobile');
+            if (memo) items.push(memo);
+          });
+          (row.styleDiffsDesktop || []).forEach(d => {
+            const memo = buildStyleMemo(d, '💻 Desktop 1200', 'styleDesktop');
+            if (memo) items.push(memo);
+          });
+        }
+        if (items.length) {
+          if (!anno.has(paraIdx)) anno.set(paraIdx, []);
+          anno.get(paraIdx).push(...items);
+        }
+      });
+      // Add single-mail + image issues
+      const imgAnno = perMailImgAnnotations[mi];
+      singlePerMail[mi].forEach(iss => {
+        const memo = {
+          severity: iss.severity,
+          title: `${iss.category}`,
+          body: iss.message + (iss.snippet ? `<div class="ecm-snippet">${escapeHtml(iss.snippet.substring(0, 300))}</div>` : ''),
+        };
+        // Image-anchored issue (explicit imgIndex, or resolvable via imgId)
+        let imgIdx = (iss.imgIndex != null) ? iss.imgIndex : (iss.imgId != null ? imgIdToIndex(mi, iss.imgId) : null);
+        if (imgIdx != null) {
+          if (!imgAnno.has(imgIdx)) imgAnno.set(imgIdx, []);
+          imgAnno.get(imgIdx).push(memo);
+          return;
+        }
+        if (iss.paraIndex == null) return;
+        if (!anno.has(iss.paraIndex)) anno.set(iss.paraIndex, []);
+        anno.get(iss.paraIndex).push(memo);
+      });
+    }
+
+    state.lastResult = { sorted, mails, tiers, fileNames, singlePerMail, rows, stats, styleDiffRowCount, perMailAnnotations, perMailImgAnnotations };
+
+    document.querySelector('[data-tab="preview"]').disabled = state.files.length === 0;
+    renderOverview();
+}
+
+// ========================================================================
+// RENDER: OVERVIEW
+// ========================================================================
+function renderOverview() {
+  const ctx = state.lastResult;
+  if (!ctx) { reportContainer.innerHTML = ''; return; }
+  const { sorted, tiers, fileNames, singlePerMail, rows, stats, styleDiffRowCount } = ctx;
+  const singleTotal = singlePerMail.reduce((a, l) => a + l.length, 0);
+
+  let html = '';
+
+  if (state.wordMaster) {
+    const wordIssues = singlePerMail.flat().filter(issue => /^Word/.test(issue.category));
+    const tierCount = Object.keys(state.wordMaster.tierPrizes).length;
+    html += `<div class="card" style="border-left:4px solid ${wordIssues.length ? '#f5b800' : '#43a047'};">
+      <h2>📘 Approved Word 比對</h2>
+      <div style="font-size:13px;line-height:1.6;color:#405159;">
+        <b>${escapeHtml(state.wordMaster.name)}</b> · TC ${state.wordMaster.tc.length} 段／EN ${state.wordMaster.en.length} 段 ·
+        ${tierCount ? `${tierCount} 組 Tier 獎品` : '未提供 Tier 獎品表'}<br>
+        ${wordIssues.length ? `<span style="color:#b26a00;font-weight:650;">⚠️ 發現 ${wordIssues.length} 項 Word 文案／獎品問題；詳情已貼到下面各封 Email。</span>` : '<span style="color:#2e7d32;font-weight:650;">✓ 未發現 Word master copy 差異</span>'}
+      </div>
+    </div>`;
+  }
+
+  // Summary
+  html += `<div class="summary">
+    <div class="stat err"><span class="icon">🔴</span><div class="num">${stats.mismatch || 0}</div><div class="lbl">真·不一致</div></div>
+    <div class="stat warn"><span class="icon">🎨</span><div class="num">${styleDiffRowCount}</div><div class="lbl">字型/CSS不一致段</div></div>
+    <div class="stat info"><span class="icon">📌</span><div class="num">${stats.tieronly || 0}</div><div class="lbl">Tier 專屬段（正常）</div></div>
+    <div class="stat" style="background:#faf5fc;"><span class="icon">🎁</span><div class="num" style="color:#8e24aa;">${stats.gift || 0}</div><div class="lbl">禮物內容（正常）</div></div>
+    <div class="stat warn"><span class="icon">💱</span><div class="num">${stats.variant || 0}</div><div class="lbl">只係變數不同（正常）</div></div>
+    <div class="stat ok"><span class="icon">✅</span><div class="num">${stats.identical || 0}</div><div class="lbl">完全一致</div></div>
+  </div>`;
+
+  // Cross-mail card
+  if (rows.length > 0) {
+    html += '<div class="card">';
+    html += '<h2>跨MAIL Side-by-side 對照</h2>';
+    html += `<div class="legend">
+      <span class="lg"><span class="dot identical"></span>一致</span>
+      <span class="lg"><span class="dot variant"></span>只係變數（正常）</span>
+      <span class="lg"><span class="dot mismatch"></span>真·不一致</span>
+      <span class="lg"><span class="dot tieronly"></span>Tier 專屬（正常）</span>
+      <span class="lg"><span class="dot gift"></span>🎁 禮物內容（正常）</span>
+    </div>`;
+    html += `<div class="filters" id="filters">
+      <span class="chip ${state.filter==='mismatch'?'active':''}" data-filter="mismatch">🔴 真·不一致 (${stats.mismatch||0})</span>
+      <span class="chip ${state.filter==='issues'?'active':''}"   data-filter="issues">⚠️ 有問題嘅段 (${(stats.mismatch||0) + styleDiffRowCount})</span>
+      <span class="chip ${state.filter==='all'?'active':''}"      data-filter="all">📋 所有段 (${rows.length})</span>
+    </div>`;
+    html += renderAlignTable(rows, fileNames, tiers);
+    html += '</div>';
+  }
+
+  // Single-mail issues
+  if (sorted.length > 0) {
+    html += '<div class="card"><h2>單封MAIL檢查</h2>';
+    sorted.forEach((row, i) => {
+      // previewOnly issues (per-icon alignment) are shown inline in Preview, not duplicated here.
+      const list = singlePerMail[i].filter(iss => !iss.previewOnly);
+      html += `<details class="single-mail-card" ${list.length > 0 ? 'open' : ''}>
+        <summary>
+          <span>📧 <b>${escapeHtml(row.file.name)}</b> · ${TIER_BY_ID[row.tier].label}</span>
+          <span class="count-badge">${list.length} issue</span>
+        </summary>
+        <div class="body">`;
+      if (list.length === 0) {
+        html += `<div style="padding:8px 0;color:#43a047;font-size:13px;">✓ 冇發現問題</div>`;
+      } else {
+        list.forEach(iss => {
+          html += `<div class="issue">
+            <span class="sev ${iss.severity}">${sevLabel(iss.severity)}</span>
+            <b>${iss.category}</b> — ${iss.message}
+            ${iss.snippet ? `<div class="snip">${escapeHtml(iss.snippet)}</div>` : ''}
+          </div>`;
+        });
+      }
+      // Image-alignment transparency debug (lists ALL images, incl. OK ones)
+      const dbg = imageAlignDebug(row.parsed);
+      if (dbg.length > 0) {
+        html += `<details class="img-debug"><summary>🔍 圖片對齊 debug（全部 ${dbg.length} 張圖 · Desktop 量度）</summary>
+          <table class="img-debug-table"><thead><tr><th>圖片</th><th>角色</th><th>對齊</th><th>下面內容</th><th>左邊界差</th></tr></thead><tbody>`;
+        dbg.forEach(d => {
+          const alignTxt = VALUE_LABEL[d.align] || d.align;
+          const nextTxt = d.nextAlign ? (VALUE_LABEL[d.nextAlign] || d.nextAlign) : '—';
+          const diffTxt = d.leftDiff == null ? '—' : `${d.leftDiff}px`;
+          html += `<tr class="${d.flagged ? 'row-flag' : ''}">
+            <td><code>${escapeHtml(d.id)}</code></td>
+            <td>${d.role === 'content-icon' ? '內容icon' : d.role === 'banner/CTA' ? 'banner/CTA' : 'logo'}</td>
+            <td>${alignTxt}</td>
+            <td>${nextTxt}</td>
+            <td>${diffTxt}</td>
+          </tr>`;
+        });
+        html += '</tbody></table></details>';
+      }
+      html += '</div></details>';
+    });
+    html += '</div>';
+  }
+
+  reportContainer.innerHTML = html;
+
+  document.querySelectorAll('#filters .chip').forEach(chip => {
+    chip.onclick = () => { state.filter = chip.dataset.filter; renderOverview(); };
+  });
+}
+
+function renderAlignTable(rows, fileNames, tiers) {
+  const filtered = rows.filter(r => {
+    if (state.filter === 'all') return true;
+    if (state.filter === 'mismatch') return r.kind === 'mismatch';
+    if (state.filter === 'issues') {
+      const hasStyle = (r.styleDiffsMobile?.length || 0) + (r.styleDiffsDesktop?.length || 0) > 0;
+      return r.kind === 'mismatch' || (hasStyle && r.kind !== 'tieronly' && r.kind !== 'gift');
+    }
+    return true;
+  });
+  const N = fileNames.length;
+  const colWidth = `${Math.floor(80 / N)}%`;
+  let html = '<div class="align-wrap"><table class="align"><thead><tr>';
+  html += '<th class="col-idx">#</th>';
+  html += '<th class="col-status">狀態</th>';
+  fileNames.forEach((fn, i) => {
+    html += `<th style="width:${colWidth}"><div class="file-label">📧 ${escapeHtml(fn)}</div><small>${tiers[i]?.id || ''}</small></th>`;
+  });
+  html += '</tr></thead><tbody>';
+  if (filtered.length === 0) {
+    html += `<tr><td colspan="${2 + N}" class="empty" style="padding:24px;">呢個filter之下無任何段落。試下切換另一個filter。</td></tr>`;
+  }
+  filtered.forEach(r => {
+    html += `<tr class="row-${r.kind}">`;
+    html += `<td class="col-idx">${r.displayIdx}</td>`;
+    html += `<td class="col-status"><span class="badge ${r.kind}">${kindLabel(r.kind)}</span></td>`;
+    r.cells.forEach((cell, i) => {
+      if (!cell) { html += `<td class="cell-empty">—</td>`; }
+      else {
+        // Combine mobile + desktop diffs into a per-viewport breakdown
+        const mob = (r.styleDiffsMobile || []).filter(d => d.outlierMails.includes(i)).map(d => d.key);
+        const dsk = (r.styleDiffsDesktop || []).filter(d => d.outlierMails.includes(i)).map(d => d.key);
+        const styleWarn = (mob.length || dsk.length)
+          ? `<div class="style-warn">⚠ CSS: ${mob.length ? '📱' + mob.join(',') : ''}${mob.length && dsk.length ? ' / ' : ''}${dsk.length ? '💻' + dsk.join(',') : ''}</div>`
+          : '';
+        // Outlier badge for text mismatch
+        const isTextOutlier = r.kind === 'mismatch' && r.textAnalysis && r.textAnalysis.outlierMails.includes(i);
+        const outlierBadge = isTextOutlier ? `<div class="outlier-badge">❌ 呢封同其他唔同</div>` : '';
+        const majorityBadge = (r.kind === 'mismatch' && r.textAnalysis && r.textAnalysis.hasClearMajority && !isTextOutlier) ? `<div class="majority-badge">✓ 同其他一致</div>` : '';
+        html += `<td class="cell-content"><div class="txt">${highlightTierVars(cell.text)}</div>${outlierBadge}${majorityBadge}${styleWarn}</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function kindLabel(k) { return { identical: '一致', variant: '只係變數', mismatch: '真·不一致', tieronly: 'Tier 專屬', gift: '🎁 禮物內容', empty: '' }[k] || k; }
+function highlightTierVars(text) {
+  const patterns = [/HK\$\s?[\d,]+(?:\.\d+)?/g, /\bT[0-6](?:-[0-6])?\b/g, /\b(Essential|Bronze|Silver|Gold|Platinum|Diamond|Diamond Plus)\b/gi, /(基本級|寶銅|白銀|黃金級|鉑金|鑽石級|尊尚鑽石級)/g];
+  let escaped = escapeHtml(text);
+  patterns.forEach(re => { escaped = escaped.replace(re, m => `<mark>${m}</mark>`); });
+  return escaped;
+}
+
+// ========================================================================
+// RENDER: PREVIEW (annotated iframe)
+// ========================================================================
+const ANNOTATION_CSS = `
+  [data-ecm-issue] { position: relative !important; scroll-margin-top: 20px !important; }
+  [data-ecm-issue="err"]  { background: #fff5f5 !important; box-shadow: inset 4px 0 0 #e53935 !important; padding-left: 12px !important; border-radius: 4px !important; }
+  [data-ecm-issue="warn"] { background: #fffaf0 !important; box-shadow: inset 4px 0 0 #f57c00 !important; padding-left: 12px !important; border-radius: 4px !important; }
+  [data-ecm-issue="info"] { background: transparent !important; box-shadow: inset 2px 0 0 #b0bec5 !important; padding-left: 10px !important; }
+  img[data-ecm-issue] { outline: 3px solid #f57c00 !important; outline-offset: 2px !important; }
+  img[data-ecm-issue="err"] { outline-color: #e53935 !important; }
+  img[data-ecm-issue="info"] { outline-color: #b0bec5 !important; }
+  .ecm-memo {
+    margin: 8px 0 14px 0 !important; padding: 10px 14px !important;
+    border-radius: 8px !important; font-family: -apple-system, "PingFang HK", sans-serif !important;
+    font-size: 12px !important; line-height: 1.55 !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,.08) !important;
+    text-align: left !important; color: #1a2027 !important;
+  }
+  .ecm-memo-err  { background: #ffebee !important; border-left: 4px solid #c62828 !important; }
+  .ecm-memo-warn { background: #fff3e0 !important; border-left: 4px solid #e65100 !important; }
+  .ecm-memo-info {
+    background: #f5f7fa !important; border-left: 2px solid #b0bec5 !important;
+    padding: 6px 10px !important; font-size: 11px !important;
+    box-shadow: none !important; opacity: .85 !important;
+  }
+  .ecm-memo-item { padding: 4px 0 !important; border-top: 1px dashed rgba(0,0,0,.08) !important; }
+  .ecm-memo-item:first-child { border-top: 0 !important; }
+  .ecm-memo-item .ecm-title {
+    display: inline-block !important; font-size: 10px !important; font-weight: 700 !important;
+    padding: 2px 7px !important; border-radius: 10px !important; margin-bottom: 4px !important;
+    text-transform: uppercase !important; letter-spacing: .3px !important;
+  }
+  .ecm-memo-err  .ecm-title { background: #c62828 !important; color: #fff !important; }
+  .ecm-memo-warn .ecm-title { background: #e65100 !important; color: #fff !important; }
+  .ecm-memo-info .ecm-title { background: transparent !important; color: #607d8b !important; padding: 0 !important; text-transform: none !important; font-weight: 500 !important; letter-spacing: 0 !important; }
+  .ecm-memo-item .ecm-body  { color: #1a2027 !important; font-size: 12px !important; }
+  .ecm-memo-item .ecm-body code { background: rgba(0,0,0,.06) !important; padding: 1px 5px !important; border-radius: 3px !important; }
+  .ecm-memo-item .ecm-snippet { margin-top: 4px !important; padding: 6px 8px !important; background: rgba(0,0,0,.04) !important; border-radius: 4px !important; font-family: "SF Mono", Menlo, monospace !important; font-size: 11px !important; color: #4a5860 !important; word-break: break-all !important; }
+  .ecm-file-list { display: flex !important; flex-direction: column !important; gap: 6px !important; margin-top: 6px !important; }
+  .ecm-file-card { padding: 8px 10px !important; background: rgba(255,255,255,.7) !important; border-radius: 6px !important; border: 1px solid rgba(0,0,0,.06) !important; }
+  .ecm-file-label {
+    display: block !important; font-size: 10px !important; color: #6c7a86 !important;
+    text-transform: uppercase !important; letter-spacing: .3px !important; margin-bottom: 4px !important;
+    font-weight: 600 !important;
+  }
+  .ecm-file-label:before { content: '📧  '; }
+  .ecm-file-value {
+    font-family: "SF Mono", Menlo, monospace !important; font-size: 12px !important;
+    color: #1a2027 !important; word-break: break-all !important; padding: 4px 6px !important;
+    background: rgba(0,0,0,.05) !important; border-radius: 4px !important; display: block !important;
+  }
+  .ecm-file-value-text {
+    font-family: inherit !important; font-size: 12px !important; padding: 4px 6px !important;
+    background: rgba(0,0,0,.05) !important; border-radius: 4px !important; display: block !important;
+    color: #1a2027 !important; line-height: 1.5 !important;
+  }
+`;
+
+function buildAnnotatedHtml(mail, annotationsMap, imgAnnotationsMap) {
+  const doc = parseDom(mail.html);
+  const nodes = Array.from(doc.querySelectorAll(PARA_SELECTOR)).filter(n => textOf(n));
+  const highestSeverity = (items) => items.some(x => x.severity === 'err') ? 'err' : items.some(x => x.severity === 'warn') ? 'warn' : 'info';
+  const memoHtml = (items) => items.map(x => `
+      <div class="ecm-memo-item">
+        <span class="ecm-title">${escapeHtml(x.title)}</span>
+        <div class="ecm-body">${x.body}</div>
+      </div>`).join('');
+  nodes.forEach((node, i) => {
+    const items = annotationsMap.get(i);
+    if (!items || items.length === 0) return;
+    const sev = highestSeverity(items);
+    node.setAttribute('data-ecm-issue', sev);
+    node.setAttribute('id', 'ecm-para-' + i);
+    const memo = doc.createElement('div');
+    memo.className = 'ecm-memo ecm-memo-' + sev;
+    memo.innerHTML = memoHtml(items);
+    node.parentNode.insertBefore(memo, node.nextSibling);
+  });
+  // Image-anchored memos
+  if (imgAnnotationsMap && imgAnnotationsMap.size) {
+    const imgs = Array.from(doc.querySelectorAll('img'));
+    imgs.forEach((img, di) => {
+      const items = imgAnnotationsMap.get(di);
+      if (!items || items.length === 0) return;
+      const sev = highestSeverity(items);
+      img.setAttribute('data-ecm-issue', sev);
+      img.setAttribute('id', 'ecm-img-' + di);
+      const memo = doc.createElement('div');
+      memo.className = 'ecm-memo ecm-memo-' + sev;
+      memo.innerHTML = memoHtml(items);
+      // Insert after the image (or its closest block parent if img is inside a tight inline wrapper)
+      (img.parentNode || doc.body).insertBefore(memo, img.nextSibling);
+    });
+  }
+  const style = doc.createElement('style');
+  style.textContent = ANNOTATION_CSS;
+  doc.head.appendChild(style);
+  return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+}
+
+function renderPreview() {
+  const ctx = state.lastResult;
+  if (!ctx) { document.getElementById('previewContainer').innerHTML = '<div class="empty">請先執行檢查</div>'; return; }
+  const { sorted, tiers, fileNames, mails, perMailAnnotations, perMailImgAnnotations } = ctx;
+  const activeIdx = Math.min(state.previewMailIdx, mails.length - 1);
+  const anno = perMailAnnotations[activeIdx];
+  const imgAnno = (perMailImgAnnotations && perMailImgAnnotations[activeIdx]) || new Map();
+  const issueCounts = perMailAnnotations.map((m, i) => {
+    let c = 0; m.forEach(items => { c += items.length; });
+    const im = (perMailImgAnnotations && perMailImgAnnotations[i]) || new Map();
+    im.forEach(items => { c += items.length; });
+    return c;
+  });
+
+  let html = '<div class="preview-layout">';
+
+  // Sidebar
+  html += '<div class="preview-sidebar">';
+  html += '<h3>選擇MAIL</h3><div class="mail-picker">';
+  fileNames.forEach((fn, i) => {
+    const cnt = issueCounts[i];
+    const cntCls = cnt === 0 ? 'zero' : '';
+    html += `<button class="${i === activeIdx ? 'active' : ''}" data-mail="${i}">
+      <span>📧 ${escapeHtml(fn.length > 22 ? fn.substring(0, 20) + '…' : fn)}<div class="tier">${tiers[i].id}</div></span>
+      <span class="cnt ${cntCls}">${cnt}</span>
+    </button>`;
+  });
+  html += '</div>';
+
+  html += '<h3>問題清單</h3><div class="jumplist">';
+  const sortedIssues = [...anno.entries()].sort((a, b) => a[0] - b[0]);
+  const sortedImgIssues = [...imgAnno.entries()].sort((a, b) => a[0] - b[0]);
+  if (sortedIssues.length === 0 && sortedImgIssues.length === 0) {
+    html += `<div style="padding:14px 8px;color:#43a047;font-size:12px;">✓ 呢封MAIL冇問題</div>`;
+  } else {
+    sortedIssues.forEach(([paraIdx, items]) => {
+      const sev = items.some(x => x.severity === 'err') ? 'err' : items.some(x => x.severity === 'warn') ? 'warn' : 'info';
+      const preview = items[0].title;
+      html += `<div class="jump-item ${sev}" data-para="${paraIdx}" title="跳去第 ${paraIdx + 1} 段">
+        <span class="num">段${paraIdx + 1}</span>
+        <span class="text">${escapeHtml(preview)}${items.length > 1 ? ` <span style="color:#999;">(+${items.length - 1})</span>` : ''}</span>
+      </div>`;
+    });
+    sortedImgIssues.forEach(([imgIdx, items]) => {
+      const sev = items.some(x => x.severity === 'err') ? 'err' : items.some(x => x.severity === 'warn') ? 'warn' : 'info';
+      const preview = items[0].title;
+      html += `<div class="jump-item ${sev}" data-img="${imgIdx}" title="跳去第 ${imgIdx + 1} 張圖">
+        <span class="num">圖${imgIdx + 1}</span>
+        <span class="text">${escapeHtml(preview)}${items.length > 1 ? ` <span style="color:#999;">(+${items.length - 1})</span>` : ''}</span>
+      </div>`;
+    });
+  }
+  html += '</div></div>';
+
+  // Main
+  const activeTier = tiers[activeIdx];
+  const tierBadgeHtml = activeTier ? `<span class="tier-badge">${escapeHtml(activeTier.id)}</span>` : '';
+  const w = state.previewWidth;
+  html += `<div class="preview-main">
+    <div class="preview-toolbar">
+      <div class="toolbar-main">
+        ${tierBadgeHtml}
+        <div class="toolbar-title">📧 <b>${escapeHtml(fileNames[activeIdx])}</b> · ${escapeHtml(sorted[activeIdx].parsed.subject)}</div>
+      </div>
+      <div class="viewport-picker" id="viewportPicker">
+        <button data-w="375" class="${w==='375'?'active':''}" title="Mobile / 手機">📱 375</button>
+        <button data-w="768" class="${w==='768'?'active':''}" title="Tablet / 平板">📱 768</button>
+        <button data-w="full" class="${w==='full'?'active':''}" title="Desktop / 電腦">💻 Full</button>
+      </div>
+      <div style="white-space:nowrap;">${anno.size + imgAnno.size} 個標註</div>
+    </div>
+    <div class="preview-frame-wrap">
+      <iframe class="preview-frame width-${w}" id="previewFrame" sandbox="allow-same-origin"></iframe>
+    </div>
+  </div>`;
+
+  html += '</div>';
+  document.getElementById('previewContainer').innerHTML = html;
+
+  // Wire mail picker
+  document.querySelectorAll('.mail-picker button').forEach(btn => {
+    btn.onclick = () => { state.previewMailIdx = +btn.dataset.mail; renderPreview(); };
+  });
+
+  // Wire viewport picker — swap iframe class without full re-render (keeps scroll)
+  document.querySelectorAll('#viewportPicker button').forEach(btn => {
+    btn.onclick = () => {
+      state.previewWidth = btn.dataset.w;
+      const iframe = document.getElementById('previewFrame');
+      iframe.classList.remove('width-375', 'width-768', 'width-full');
+      iframe.classList.add('width-' + state.previewWidth);
+      document.querySelectorAll('#viewportPicker button').forEach(b => b.classList.toggle('active', b === btn));
+    };
+  });
+
+  // Load iframe
+  const iframe = document.getElementById('previewFrame');
+  const annotated = buildAnnotatedHtml(mails[activeIdx], anno, imgAnno);
+  iframe.srcdoc = annotated;
+
+  // Wire jump list — need to wait for iframe load
+  iframe.addEventListener('load', () => {
+    document.querySelectorAll('.jump-item').forEach(item => {
+      item.onclick = () => {
+        const id = item.dataset.para != null ? 'ecm-para-' + item.dataset.para : 'ecm-img-' + item.dataset.img;
+        const target = iframe.contentDocument.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+    });
+  }, { once: true });
+}
+
+// ========================================================================
+// HELPERS
+// ========================================================================
+function sevLabel(s) { return s === 'err' ? '錯誤' : s === 'warn' ? '警告' : '提示'; }
+function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+</script>
+</body>
+</html>
