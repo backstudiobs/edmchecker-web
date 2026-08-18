@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.20</title>
+<title>SUN仔 EDM及 Website 小助手 v3.20.1</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -434,7 +434,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.20</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.20.1</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -504,7 +504,7 @@
           <li><b>多餘空白：</b>中文字之間嘅單一／連續空格（包括 <code>&amp;nbsp;</code>、全形空格）、句末 <code>&amp;nbsp;</code>、連續2+空格</li>
           <li><b>標點：</b>中文段落用咗半形標點（,.!?()）、成對符號未閉合（「」『』（））</li>
           <li><b>稱謂：</b>Chinese段落必須用「<code>您</code>」（避免用「<code>你</code>」）</li>
-          <li><b>術語：</b>Coupon統一用「<code>電子現金券</code>」，唔應該用「電子禮券」</li>
+          <li><b>術語：</b>Coupon統一用「<code>電子現金券</code>」，唔應該用「電子禮券」；完整正名「<code>法式焦糖燉蛋電子禮券</code>」除外</li>
           <li><b>金額格式：</b>HK$XX 之後接中文字時要加空格（正確：<code>HK$50 電子現金券</code>，錯：<code>HK$100券</code>）；前面接中文（例 <code>獲享HK$50</code>）係OK</li>
           <li><b>HTML 雜訊：</b>空 <code>&lt;a&gt;</code> tag、<code>&lt;u&gt;</code> 同 <code>text-decoration:underline</code> 混用</li>
         </ul>
@@ -524,6 +524,7 @@
         <ul>
           <li>會用 <b>iframe render</b> 每封MAIL喺 <b>Mobile 375</b> 同 <b>Desktop 1200</b> 兩個viewport下攞真正嘅 <code>getComputedStyle</code>（includes <code>&lt;style&gt;</code> block、<code>@media</code> query、inheritance — 唔止inline style）</li>
           <li>Check keys: <b>文字對齊（置左/中/右）</b> / <code>font-weight</code>（BOLD） / <code>font-family</code> / <code>font-size</code> / <code>line-height</code> / <code>margin</code> / <code>color</code> / <code>font-style</code> / <code>text-decoration</code></li>
+          <li><b>中英文字型：</b>中文用 <code>"Noto Sans TC", "ヒラギノ角ゴ Pro W3"</code>、英文用 <code>"Sun Life New Text", Arial</code> 視為語言對應嘅正常組合，唔會當成跨語言字型不一致；同語言或其他字型差異仍會提示</li>
           <li><b>文字對齊</b>用 <b>bounding-box 視覺偵測</b>（量度文字實際位置 vs 容器）— 唔理個置中係用 <code>text-align</code>、<code>margin:auto</code> 定 <code>&lt;td align&gt;</code> 做，都captured到。捉到「應該置左但置中」呢類問題</li>
           <li>Majority vote：3+封MAIL之中1封唔一致 → 只 flag outlier；每個issue會標明係 📱 Mobile 定 💻 Desktop 出事</li>
           <li>捉到之前 <b>inline-style only</b> check 錯過嘅：<code>&lt;style&gt;</code> block 內定義嘅樣式、responsive layout差異、BOLD/置中mismatch</li>
@@ -1303,6 +1304,10 @@ function rowStyleDiffs(row, styleKey = 'style') {
       const raw = styleObj[k] || '';
       return { mail: x.i, raw, norm: normalizeCssValue(raw) };
     });
+    // TC and EN masters intentionally use different approved font stacks.
+    // Suppress only when every compared cell uses the stack matching its own language;
+    // an unexpected font in either language still remains a real mismatch.
+    if (k === 'font-family' && isApprovedBilingualFontRow(present, styleKey)) continue;
     // For 'align', empty means "couldn't determine / skipped" (multi-line text) — exclude those cells
     if (k === 'align') {
       cellVals = cellVals.filter(x => x.raw !== '');
@@ -1333,6 +1338,36 @@ function rowStyleDiffs(row, styleKey = 'style') {
     });
   }
   return diffs;
+}
+
+function paragraphLanguage(text) {
+  const value = String(text || '');
+  if (/[\u3400-\u9fff]/.test(value)) return 'tc';
+  if (/[A-Za-z]/.test(value)) return 'en';
+  return '';
+}
+
+function isApprovedLanguageFont(language, fontFamily) {
+  const value = normalizeCssValue(fontFamily).toLowerCase();
+  if (language === 'tc') {
+    return value.includes('noto sans tc') && value.includes('ヒラギノ角ゴ pro w3');
+  }
+  if (language === 'en') {
+    return value.includes('sun life new text') && value.includes('arial');
+  }
+  return false;
+}
+
+function isApprovedBilingualFontRow(present, styleKey) {
+  const languages = new Set();
+  const allApproved = present.every(({ p }) => {
+    const language = paragraphLanguage(p.text);
+    if (!language) return false;
+    languages.add(language);
+    const styleObj = p[styleKey] || {};
+    return isApprovedLanguageFont(language, styleObj['font-family'] || '');
+  });
+  return allApproved && languages.has('tc') && languages.has('en');
 }
 
 // Majority-vote analysis for text mismatches (uses masked key)
@@ -1492,13 +1527,19 @@ function checkHonorific(mail) {
   return issues;
 }
 
-// Rule: coupon term — should be 電子現金券, not 電子禮券
+// Rule: coupon term — should be 電子現金券, not 電子禮券.
+// The complete official product name below is an approved proper-name exception.
+const APPROVED_E_VOUCHER_NAMES = ['法式焦糖燉蛋電子禮券'];
 function checkCouponTerm(mail) {
   const issues = [];
   const doc = parseDom(mail.html);
   extractParagraphs(doc).forEach((p, i) => {
     const t = p.text;
-    const matches = t.match(/電子禮券/g);
+    const termScan = APPROVED_E_VOUCHER_NAMES.reduce(
+      (value, properName) => value.split(properName).join(''),
+      t
+    );
+    const matches = termScan.match(/電子禮券/g);
     if (matches && matches.length > 0) {
       issues.push({
         severity: 'warn', category: '術語',
