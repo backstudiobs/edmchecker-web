@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.20.1</title>
+<title>SUN仔 EDM及 Website 小助手 v3.20.2</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -434,7 +434,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.20.1</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.20.2</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -504,7 +504,7 @@
           <li><b>多餘空白：</b>中文字之間嘅單一／連續空格（包括 <code>&amp;nbsp;</code>、全形空格）、句末 <code>&amp;nbsp;</code>、連續2+空格</li>
           <li><b>標點：</b>中文段落用咗半形標點（,.!?()）、成對符號未閉合（「」『』（））</li>
           <li><b>稱謂：</b>Chinese段落必須用「<code>您</code>」（避免用「<code>你</code>」）</li>
-          <li><b>術語：</b>Coupon統一用「<code>電子現金券</code>」，唔應該用「電子禮券」；完整正名「<code>法式焦糖燉蛋電子禮券</code>」除外</li>
+          <li><b>術語：</b>Coupon統一用「<code>電子現金券</code>」，唔應該用「電子禮券」；完整禮品正名「<code>法式焦糖燉蛋電子禮券</code>」、「<code>戚風小蛋糕電子禮券</code>」、「<code>原個戚風大蛋糕電子禮券</code>」除外</li>
           <li><b>金額格式：</b>HK$XX 之後接中文字時要加空格（正確：<code>HK$50 電子現金券</code>，錯：<code>HK$100券</code>）；前面接中文（例 <code>獲享HK$50</code>）係OK</li>
           <li><b>HTML 雜訊：</b>空 <code>&lt;a&gt;</code> tag、<code>&lt;u&gt;</code> 同 <code>text-decoration:underline</code> 混用</li>
         </ul>
@@ -1529,7 +1529,11 @@ function checkHonorific(mail) {
 
 // Rule: coupon term — should be 電子現金券, not 電子禮券.
 // The complete official product name below is an approved proper-name exception.
-const APPROVED_E_VOUCHER_NAMES = ['法式焦糖燉蛋電子禮券'];
+const APPROVED_E_VOUCHER_NAMES = [
+  '法式焦糖燉蛋電子禮券',
+  '戚風小蛋糕電子禮券',
+  '原個戚風大蛋糕電子禮券',
+];
 function checkCouponTerm(mail) {
   const issues = [];
   const doc = parseDom(mail.html);
