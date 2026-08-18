@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.19.1</title>
+<title>SUN仔 EDM及 Website 小助手 v3.20</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -434,7 +434,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.19.1</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.20</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -499,8 +499,8 @@
       <div class="rules-content">
         <h3>單封MAIL (Single-email)</h3>
         <ul>
-          <li><b>Approved Word（可選）：</b>上載 `.docx` 後，自動讀第一個 TC／EN EDM 文案表；按 Email 語言比對 approved copy。另可加入 Tier／TC獎品／EN獎品表格驗證相應 Tier 獎品。無 Word 時不影響任何舊規則。</li>
-          <li><b>語言連結：</b>右上角「EN/繁體」link 指向嘅 <code>*_T{tier}_*_(EN|TC).html</code>，check 有無對應到你揀嘅 tier</li>
+          <li><b>Approved Word（可選）：</b>上載 `.docx` 後，自動讀 TC／EN EDM 文案表；有 TC／EN 表頭會直接使用，無表頭時會按中英文內容自動辨認欄位。另支援 Reward 表內嘅 Tier 1／Tier 2-4／Tier 5-6 獎品格式。無 Word 時不影響任何舊規則。</li>
+          <li><b>語言連結：</b>右上角「EN/繁體」link 指向嘅 <code>*_T{tier}_*_(EN|TC).html</code>，check 有無對應到你揀嘅 tier；支援單 Tier（T1…T6）同組合 Tier（例如 T1-2／T2-4／T5-6）</li>
           <li><b>多餘空白：</b>中文字之間嘅單一／連續空格（包括 <code>&amp;nbsp;</code>、全形空格）、句末 <code>&amp;nbsp;</code>、連續2+空格</li>
           <li><b>標點：</b>中文段落用咗半形標點（,.!?()）、成對符號未閉合（「」『』（））</li>
           <li><b>稱謂：</b>Chinese段落必須用「<code>您</code>」（避免用「<code>你</code>」）</li>
@@ -563,11 +563,28 @@
 // ========================================================================
 const TIERS = [
   { id: 'T0',   label: 'T0 · Essential 基本級',        enLink: 'LPI3_T0_EN.html',   order: 0 },
-  { id: 'T1-2', label: 'T1-2 · Bronze-Silver 寶銅-白銀', enLink: 'LPI3_T1-2_EN.html', order: 1 },
-  { id: 'T3',   label: 'T3 · Gold 黃金級',              enLink: 'LPI3_T3_EN.html',   order: 2 },
-  { id: 'T4-6', label: 'T4-6 · Platinum-Diamond 鉑金-鑽石級', enLink: 'LPI3_T4-6_EN.html', order: 3 },
+  { id: 'T1',   label: 'T1 · Tier 1', order: 1 },
+  { id: 'T1-2', label: 'T1-2 · Bronze-Silver 寶銅-白銀', enLink: 'LPI3_T1-2_EN.html', order: 1.2 },
+  { id: 'T2',   label: 'T2 · Tier 2', order: 2 },
+  { id: 'T2-4', label: 'T2-4 · Tier 2-4', order: 2.4 },
+  { id: 'T3',   label: 'T3 · Gold 黃金級',              enLink: 'LPI3_T3_EN.html',   order: 3 },
+  { id: 'T4',   label: 'T4 · Tier 4', order: 4 },
+  { id: 'T4-6', label: 'T4-6 · Platinum-Diamond 鉑金-鑽石級', enLink: 'LPI3_T4-6_EN.html', order: 4.6 },
+  { id: 'T5',   label: 'T5 · Tier 5', order: 5 },
+  { id: 'T5-6', label: 'T5-6 · Tier 5-6', order: 5.6 },
+  { id: 'T6',   label: 'T6 · Tier 6', order: 6 },
 ];
 const TIER_BY_ID = Object.fromEntries(TIERS.map(t => [t.id, t]));
+function normalizeTierId(raw) {
+  const match = String(raw || '').match(/(?:T(?:IER)?\s*)([0-9]+)(?:\s*-\s*([0-9]+))?/i);
+  return match ? `T${Number(match[1])}${match[2] != null ? `-${Number(match[2])}` : ''}` : '';
+}
+function tierInfo(raw) {
+  const id = normalizeTierId(raw) || 'T0';
+  if (TIER_BY_ID[id]) return TIER_BY_ID[id];
+  const nums = id.match(/\d+/g) || ['99'];
+  return { id, label: `${id} · Campaign tier`, order: Number(nums[0]) + (nums[1] ? Number(nums[1]) / 10 : 0) };
+}
 
 // ========================================================================
 // EML PARSER
@@ -1670,6 +1687,52 @@ function wordTableMatrix(tbl) {
     return paras.map(wordNodeText).filter(Boolean);
   }));
 }
+function wordCellText(cell) { return (cell || []).join('\n').trim(); }
+function wordLanguageEvidence(text) {
+  const value = String(text || '');
+  return {
+    cjk: (value.match(/[\u3400-\u9fff]/g) || []).length,
+    latinWords: (value.match(/[A-Za-z]+/g) || []).length,
+  };
+}
+function detectBilingualWordTable(matrices) {
+  // Preferred format: an explicit header row containing TC and EN/English.
+  for (const matrix of matrices) {
+    for (let rowIndex = 0; rowIndex < Math.min(matrix.length, 4); rowIndex++) {
+      const headers = (matrix[rowIndex] || []).map(cell => wordCellText(cell).toUpperCase());
+      const tcCol = headers.findIndex(x => /^(?:TC|中文|繁中|繁體中文)$/.test(x));
+      const enCol = headers.findIndex(x => /^(?:EN|ENG|ENGLISH|英文)$/.test(x));
+      if (tcCol >= 0 && enCol >= 0 && tcCol !== enCol) {
+        return { matrix, tcCol, enCol, startRow: rowIndex + 1, inferred: false };
+      }
+    }
+  }
+
+  // Flexible agency format: a label column followed by Chinese and English copy,
+  // without a literal TC/EN header (for example: blank | Enrolled N).
+  let best = null;
+  matrices.forEach(matrix => {
+    const colCount = Math.max(0, ...matrix.map(row => row.length));
+    for (let tcCol = 0; tcCol < colCount; tcCol++) {
+      for (let enCol = 0; enCol < colCount; enCol++) {
+        if (tcCol === enCol) continue;
+        const tcText = matrix.map(row => wordCellText(row[tcCol])).join('\n');
+        const enText = matrix.map(row => wordCellText(row[enCol])).join('\n');
+        const tc = wordLanguageEvidence(tcText);
+        const en = wordLanguageEvidence(enText);
+        if (tc.cjk < 8 || en.latinWords < 8 || tc.cjk <= en.cjk * 1.5) continue;
+        let startRow = matrix.findIndex(row => {
+          const left = wordCellText(row[tcCol]), right = wordCellText(row[enCol]);
+          return wordLanguageEvidence(left).cjk > 0 && wordLanguageEvidence(right).latinWords > 0;
+        });
+        if (startRow < 0) continue;
+        const score = tc.cjk * 4 + en.latinWords * 2 - en.cjk * 3;
+        if (!best || score > best.score) best = { matrix, tcCol, enCol, startRow, inferred: true, score };
+      }
+    }
+  });
+  return best;
+}
 async function readDocxZipEntry(file, wantedName) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -1707,22 +1770,34 @@ async function readDocxZipEntry(file, wantedName) {
 }
 function detectTierPrizeTable(matrices) {
   const prizes = {};
+  const addPrizeRow = (row, tierCol, tcCol, enCol) => {
+    const tier = normalizeTierId(wordCellText(row[tierCol]));
+    if (!tier) return;
+    const tc = tcCol >= 0 ? wordCellText(row[tcCol]) : '';
+    const en = enCol >= 0 ? wordCellText(row[enCol]) : '';
+    if (!tc && !en) return;
+    prizes[tier] = { TC: tc, EN: en };
+  };
   matrices.forEach(matrix => {
-    if (!matrix.length || matrix[0].length < 3) return;
-    const headers = matrix[0].map(cell => cell.join(' ').trim());
-    const tierCol = headers.findIndex(x => /tier|會籍|級別/i.test(x));
-    const tcCol = headers.findIndex(x => /^(?:tc|中文)|tc.*獎品|獎品.*tc/i.test(x));
-    const enCol = headers.findIndex(x => /^(?:en|english)|en.*(?:prize|reward)|(?:prize|reward).*en/i.test(x));
-    if (tierCol < 0 || (tcCol < 0 && enCol < 0)) return;
-    matrix.slice(1).forEach(row => {
-      const rawTier = (row[tierCol] || []).join(' ');
-      const match = rawTier.match(/T[0-6](?:-[0-6])?/i);
-      if (!match) return;
-      const tier = match[0].toUpperCase();
-      prizes[tier] = {
-        TC: tcCol >= 0 ? (row[tcCol] || []).join(' ').trim() : '',
-        EN: enCol >= 0 ? (row[enCol] || []).join(' ').trim() : '',
-      };
+    if (!matrix.length) return;
+    let usedHeader = false;
+    matrix.forEach((headerRow, headerIndex) => {
+      if (usedHeader || headerRow.length < 3) return;
+      const headers = headerRow.map(cell => wordCellText(cell));
+      const tierCol = headers.findIndex(x => /tier|會籍|級別/i.test(x));
+      const tcCol = headers.findIndex(x => /^(?:tc|中文)|tc.*獎品|獎品.*tc/i.test(x));
+      const enCol = headers.findIndex(x => /^(?:en|english)|en.*(?:prize|reward)|(?:prize|reward).*en/i.test(x));
+      if (tierCol < 0 || (tcCol < 0 && enCol < 0)) return;
+      matrix.slice(headerIndex + 1).forEach(row => addPrizeRow(row, tierCol, tcCol, enCol));
+      usedHeader = true;
+    });
+    if (usedHeader) return;
+    // Headerless/merged-header format: Tier label, Chinese reward, English reward.
+    matrix.forEach(row => {
+      if (row.length < 3 || !normalizeTierId(wordCellText(row[0]))) return;
+      const tcEvidence = wordLanguageEvidence(wordCellText(row[1]));
+      const enEvidence = wordLanguageEvidence(wordCellText(row[2]));
+      if (tcEvidence.cjk > 0 && enEvidence.latinWords > 0) addPrizeRow(row, 0, 1, 2);
     });
   });
   return prizes;
@@ -1732,23 +1807,27 @@ async function parseApprovedWord(file) {
   const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
   if (xml.querySelector('parsererror')) throw new Error('Word XML 無法解析');
   const matrices = Array.from(xml.getElementsByTagNameNS('*', 'tbl')).map(wordTableMatrix);
-  const bilingual = matrices.find(matrix => {
-    if (!matrix.length || matrix[0].length < 2) return false;
-    const a = (matrix[0][0] || []).join(' ').trim().toUpperCase();
-    const b = (matrix[0][1] || []).join(' ').trim().toUpperCase();
-    return a === 'TC' && b === 'EN';
-  });
-  if (!bilingual) throw new Error('搵唔到以 TC／EN 做表頭嘅 EDM 文案表格');
-  const collectColumn = col => bilingual.slice(1).flatMap(row => (row[col] || []))
+  const bilingual = detectBilingualWordTable(matrices);
+  if (!bilingual) throw new Error('搵唔到可辨認嘅中英文 EDM 文案欄（支援 TC／EN 表頭或中英內容自動辨認）');
+  const collectColumn = col => bilingual.matrix.slice(bilingual.startRow).flatMap(row => (row[col] || []))
     .flatMap(text => text.split(/\n+/)).map(text => text.trim()).filter(Boolean);
-  const tc = collectColumn(0), en = collectColumn(1);
+  const tc = collectColumn(bilingual.tcCol), en = collectColumn(bilingual.enCol);
+  const subjectRow = bilingual.matrix.slice(bilingual.startRow).find(row => row.some((cell, col) =>
+    col !== bilingual.tcCol && col !== bilingual.enCol && /^(?:email\s*subject|subject|電郵主旨|郵件主旨)$/i.test(wordCellText(cell))
+  ));
+  const subjects = subjectRow ? {
+    TC: wordCellText(subjectRow[bilingual.tcCol]),
+    EN: wordCellText(subjectRow[bilingual.enCol]),
+  } : { TC: '', EN: '' };
   const inserted = xml.getElementsByTagNameNS('*', 'ins').length;
   const deleted = xml.getElementsByTagNameNS('*', 'del').length;
   const highlights = xml.getElementsByTagNameNS('*', 'highlight').length;
-  return { name: file.name, tc, en, tierPrizes: detectTierPrizeTable(matrices), meta: { inserted, deleted, highlights } };
+  return { name: file.name, tc, en, subjects, tierPrizes: detectTierPrizeTable(matrices), meta: { inserted, deleted, highlights, inferredColumns: bilingual.inferred } };
 }
 function isDynamicMasterSegment(text) {
-  return /(?:XXX|Dear\s+Sir\/?Madam|\{\{|WhatsApp|@[a-z0-9.-]+\.[a-z]{2,}|Chen\s+Manqi|\b(?:\+?852\s*)?\d{4}\s*\d{4}\b)/i.test(text);
+  return /(?:XXX|Dear\s+Sir\/?Madam|\{\{|WhatsApp|@[a-z0-9.-]+\.[a-z]{2,}|Chen\s+Manqi|\b(?:\+?852\s*)?\d{4}\s*\d{4}\b)/i.test(text)
+    || /^\s*(?:Tier|T)\s*[0-9]+(?:\s*-\s*[0-9]+)?\s*[:：]/i.test(text)
+    || /\bCTA\s*button\b/i.test(text);
 }
 function cleanMasterSegment(text) {
   return String(text || '').replace(/\[button\]/gi, '').replace(/【\s*button\s*】/gi, '')
@@ -1783,10 +1862,34 @@ function detectCopyLanguage(mail) {
   const latin = (text.match(/[A-Za-z]/g) || []).length;
   return cjk > Math.max(12, latin * 0.18) ? 'TC' : 'EN';
 }
+function tierBounds(raw) {
+  const id = normalizeTierId(raw);
+  const match = id.match(/^T(\d+)(?:-(\d+))?$/);
+  if (!match) return null;
+  return { start: Number(match[1]), end: Number(match[2] || match[1]) };
+}
+function findTierPrize(tierPrizes, tierId, lang) {
+  const exact = tierPrizes[tierId];
+  if (exact && exact[lang]) return { tier: tierId, text: exact[lang] };
+  const wanted = tierBounds(tierId);
+  if (!wanted || wanted.start !== wanted.end) return null;
+  for (const [candidateTier, value] of Object.entries(tierPrizes)) {
+    const range = tierBounds(candidateTier);
+    if (range && range.start <= wanted.start && wanted.start <= range.end && value[lang]) {
+      return { tier: candidateTier, text: value[lang] };
+    }
+  }
+  return null;
+}
 function checkApprovedWordCopy(mail, tierId, master) {
   if (!master) return [];
   const lang = detectCopyLanguage(mail);
-  const source = lang === 'TC' ? master.tc : master.en;
+  let source = lang === 'TC' ? master.tc : master.en;
+  const hasRealSubject = !!mail.subject && mail.subject !== mail.fileName && !/^\[(?:Folder|URL)\]/.test(mail.subject);
+  if (!hasRealSubject && master.subjects && master.subjects[lang]) {
+    const subjectKey = compactCopy(master.subjects[lang]);
+    source = source.filter(text => compactCopy(text) !== subjectKey);
+  }
   const masterSegments = [...new Set(source.map(cleanMasterSegment))]
     .filter(text => text.length >= 8 && !isDynamicMasterSegment(text) && !/^[\d\s☐☑✓✔•|+()*_.-]+$/.test(text));
   const emailDoc = parseDom(mail.html);
@@ -1824,18 +1927,18 @@ function checkApprovedWordCopy(mail, tierId, master) {
       });
     }
   });
-  const expectedPrize = master.tierPrizes[tierId] && master.tierPrizes[tierId][lang];
+  const expectedPrize = findTierPrize(master.tierPrizes, tierId, lang);
   if (expectedPrize) {
     const body = emailCompact;
-    if (!body.includes(compactCopy(expectedPrize))) {
+    if (!body.includes(compactCopy(expectedPrize.text))) {
       const wrong = Object.entries(master.tierPrizes).find(([otherTier, value]) =>
         otherTier !== tierId && value[lang] && body.includes(compactCopy(value[lang]))
       );
       issues.push({
         severity: 'err', category: 'Word Tier獎品',
         message: wrong
-          ? `呢封係 <b>${escapeHtml(tierId)}</b>，但搵到 <b>${escapeHtml(wrong[0])}</b> 獎品「${escapeHtml(wrong[1][lang])}」；Word 預期係「${escapeHtml(expectedPrize)}」`
-          : `呢封係 <b>${escapeHtml(tierId)}</b>，Word 預期獎品「${escapeHtml(expectedPrize)}」，Email 內搵唔到`,
+          ? `呢封係 <b>${escapeHtml(tierId)}</b>，但搵到 <b>${escapeHtml(wrong[0])}</b> 獎品「${escapeHtml(wrong[1][lang])}」；Word 預期係「${escapeHtml(expectedPrize.text)}」`
+          : `呢封係 <b>${escapeHtml(tierId)}</b>，Word 預期獎品「${escapeHtml(expectedPrize.text)}」${expectedPrize.tier !== tierId ? `（按 ${escapeHtml(expectedPrize.tier)}）` : ''}，Email 內搵唔到`,
       });
     }
   }
@@ -1894,7 +1997,7 @@ function renderWordMasterStatus() {
   wordStatus.innerHTML = `<span class="master-ok">✓ Approved Word 已載入</span> · <b>${escapeHtml(master.name)}</b><br>` +
     `EDM master：TC ${master.tc.length} 段／EN ${master.en.length} 段 · ` +
     (tiers.length ? `Tier獎品：${tiers.map(escapeHtml).join('、')}` : '未偵測到 Tier 獎品表（只做文案比較）') +
-    ` · 修訂：+${master.meta.inserted}/−${master.meta.deleted}`;
+    ` · 文案欄：${master.meta.inferredColumns ? '按內容自動辨認' : 'TC／EN 表頭'} · 修訂：+${master.meta.inserted}/−${master.meta.deleted}`;
   wordRemoveBtn.hidden = false;
 }
 wordBtn.onclick = () => { wordInput.value = ''; wordInput.click(); };
@@ -2103,7 +2206,7 @@ async function handleFiles(fileList) {
 function addToState(file, parsed, sourceUrl) {
   let guess = null;
   const m = parsed.html && parsed.html.match(/_(T[0-9]+(?:-[0-9]+)?)_(?:[a-zA-Z0-9]+_)?(?:EN|TC)\.html/i);
-  if (m) guess = m[1].toUpperCase();
+  if (m) guess = normalizeTierId(m[1]);
   const mailType = detectMailType(parsed.html);
   state.files.push({
     file, parsed,
@@ -2151,6 +2254,7 @@ async function addFromUrl(url) {
 function renderFiles() {
   filesEl.innerHTML = '';
   state.files.forEach((row, i) => {
+    const tierChoices = TIER_BY_ID[row.tier] ? TIERS : [...TIERS, tierInfo(row.tier)].sort((a, b) => a.order - b.order);
     const div = document.createElement('div');
     div.className = 'file-row';
     const pillCls = row.autoGuessed ? 'auto' : 'manual';
@@ -2160,7 +2264,7 @@ function renderFiles() {
     div.innerHTML = `
       <div class="icon">${icon}</div>
       <div class="name" title="${escapeHtml(subText)}">${escapeHtml(row.file.name)}<div class="sub">${escapeHtml(subText)}</div></div>
-      <select data-idx="${i}" data-kind="tier">${TIERS.map(t => `<option value="${t.id}" ${t.id === row.tier ? 'selected' : ''}>${t.label}</option>`).join('')}</select>
+      <select data-idx="${i}" data-kind="tier">${tierChoices.map(t => `<option value="${t.id}" ${t.id === row.tier ? 'selected' : ''}>${t.label}</option>`).join('')}</select>
       <select data-idx="${i}" data-kind="type">
         <option value="email" ${row.mailType === 'email' ? 'selected' : ''}>📧 EDM 電郵</option>
         <option value="web" ${row.mailType === 'web' ? 'selected' : ''}>🌐 網頁版</option>
@@ -2194,9 +2298,11 @@ function renderFiles() {
 // ========================================================================
 async function runChecks() {
   reportContainer.innerHTML = '<div class="empty">⏳ 計算中… <div style="font-size:11px;margin-top:6px;">rendering styles at Mobile 375 + Desktop 1200 viewports</div></div>';
-  const sorted = [...state.files].sort((a, b) => (TIER_BY_ID[a.tier]?.order ?? 99) - (TIER_BY_ID[b.tier]?.order ?? 99));
+  runBtn.disabled = true;
+  try {
+  const sorted = [...state.files].sort((a, b) => tierInfo(a.tier).order - tierInfo(b.tier).order);
   const mails = sorted.map(r => r.parsed);
-  const tiers = sorted.map(r => TIER_BY_ID[r.tier]);
+  const tiers = sorted.map(r => tierInfo(r.tier));
   const fileNames = sorted.map(r => r.file.name);
 
   // Compute REAL styles at 2 viewports (mobile + desktop) via iframe render.
@@ -2210,7 +2316,7 @@ async function runChecks() {
   await new Promise(r => setTimeout(r, 30));
 
     const singlePerMail = sorted.map(row => {
-      const tier = TIER_BY_ID[row.tier];
+      const tier = tierInfo(row.tier);
       const mailType = row.mailType || detectMailType(row.parsed.html);
       const typeChecks = mailType === 'email'
         ? checkEmailRequirements(row.parsed)
@@ -2393,6 +2499,16 @@ async function runChecks() {
 
     document.querySelector('[data-tab="preview"]').disabled = state.files.length === 0;
     renderOverview();
+  } catch (err) {
+    console.error('EDM checker run failed', err);
+    reportContainer.innerHTML = `<div class="card" style="border-left:4px solid #e53935;">
+      <h2 style="color:#c62828;">⚠️ 檢查未能完成</h2>
+      <div style="font-size:13px;line-height:1.6;color:#405159;">${escapeHtml(err && err.message ? err.message : String(err))}</div>
+      <div style="font-size:12px;color:#6c7a86;margin-top:8px;">請檢查檔案及 Tier 選擇後再試；畫面唔會再永久停喺「計算中」。</div>
+    </div>`;
+  } finally {
+    runBtn.disabled = state.files.length === 0;
+  }
 }
 
 // ========================================================================
@@ -2457,7 +2573,7 @@ function renderOverview() {
       const list = singlePerMail[i].filter(iss => !iss.previewOnly);
       html += `<details class="single-mail-card" ${list.length > 0 ? 'open' : ''}>
         <summary>
-          <span>📧 <b>${escapeHtml(row.file.name)}</b> · ${TIER_BY_ID[row.tier].label}</span>
+          <span>📧 <b>${escapeHtml(row.file.name)}</b> · ${tierInfo(row.tier).label}</span>
           <span class="count-badge">${list.length} issue</span>
         </summary>
         <div class="body">`;
