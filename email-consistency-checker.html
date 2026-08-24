@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.22.1</title>
+<title>SUN仔 EDM及 Website 小助手 v3.23</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -461,7 +461,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.22.1</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.23</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -484,10 +484,10 @@
   <section class="panel active" id="panel-overview">
     <div class="card">
       <label class="drop" id="drop">
-        <input type="file" id="fileInput" multiple accept=".eml,.html,.htm,.xml,message/rfc822,text/html,application/xml,text/xml">
+        <input type="file" id="fileInput" multiple accept=".eml,.html,.htm,.xml,.zip,message/rfc822,text/html,application/xml,text/xml,application/zip">
         <div class="icon">📥</div>
-        <div class="title">拖 .eml / .html / .xml／完整網頁資料夾入嚟，或按呢度選擇</div>
-        <div class="hint">支援一次過多封檔案；拖入完整 folder 會連圖片、CSS、字型一齊載入</div>
+        <div class="title">拖 .eml / .html / .xml / .zip／完整網頁資料夾入嚟，或按呢度選擇</div>
+        <div class="hint">支援一次過多封檔案；ZIP 會自動解出 index.html，folder／ZIP 內圖片、CSS、字型會一齊載入</div>
       </label>
       <div class="url-input-row">
         <input type="url" id="urlInput" placeholder="或者貼 EDM 網頁版 URL（例：https://campaign.sunlife.com.hk/...）">
@@ -496,7 +496,7 @@
         <input type="file" webkitdirectory multiple id="folderInput" hidden>
       </div>
       <div style="font-size:11px;color:#6c7a86;margin-top:6px;">
-        💡 <b>下載完整網頁</b>後（HTML + 圖片folder），揀「📁 選整個資料夾」等圖片正常顯示喺preview
+        💡 可直接拖入下載所得 <b>ZIP</b>，毋須解壓或改 index.html 名；亦可揀「📁 選整個資料夾」
       </div>
       <div class="master-copy-row">
         <input type="file" id="wordInput" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
@@ -532,7 +532,7 @@
       <div class="rules-content">
         <h3>單封MAIL (Single-email)</h3>
         <ul>
-          <li><b>Approved Word（可選）：</b>上載 `.docx` 後，自動讀 TC／EN EDM 文案表；有 TC／EN 表頭會直接使用，無表頭時會按中英文內容自動辨認欄位。Word 有 Enrolled／Not Enrolled 區塊時，會按檔名 <code>_E_</code>／<code>_NE_</code> 自動揀相應文案。另支援 Reward 表內嘅 Tier 1／Tier 2-4／Tier 5-6 獎品格式。Word 內 <code>(Based on related tier)</code> 會視為製作備註；Tier 禮品選項之間嘅行尾 <code>/</code> 會視為 separator。無 Word 時不影響任何舊規則。</li>
+          <li><b>Approved Word（可選）：</b>上載 <code>.docx</code> 後，自動讀 TC／EN EDM 文案表；有 TC／EN 表頭會直接使用，無表頭時會按中英文內容自動辨認欄位。Word 有 Enrolled／Not Enrolled 區塊時，會按檔名 <code>_E_</code>／<code>_NE_</code> 自動揀相應文案。Tier 獎品表支援 TC／EN 雙語欄，亦支援 <code>Tier 3-4 | Petits Fours | $92</code> 類單一產品名格式；Petits Fours／Palmier 會對應中英文正式名稱。<code>(Button)</code>、<code>Gift box image</code>、<code>(Based on related tier)</code> 及 alternative 行尾 <code>/</code> 視為製作註記。無 Word 時會顯示禮物不同，但不會假定邊款屬於正確 Tier。</li>
           <li><b>語言連結：</b>右上角「EN/繁體」link 指向嘅 <code>*_T{tier}_*_(EN|TC).html</code>，check 有無對應到你揀嘅 tier；支援單 Tier（T1…T6）同組合 Tier（例如 T1-2／T2-4／T5-6）</li>
           <li><b>多餘空白：</b>中文字之間嘅單一／連續空格（包括 <code>&amp;nbsp;</code>、全形空格）、句末 <code>&amp;nbsp;</code>、連續2+空格</li>
           <li><b>標點：</b>中文段落用咗半形標點（,.!?()）、成對符號未閉合（「」『』（））</li>
@@ -1941,6 +1941,64 @@ async function readDocxZipEntry(file, wantedName) {
   }
   throw new Error('DOCX 缺少 word/document.xml');
 }
+function safeZipEntryPath(name) {
+  const parts = String(name || '').replace(/\\/g, '/').split('/').filter(part => part && part !== '.' && part !== '..');
+  return parts.join('/');
+}
+async function readZipPackageFiles(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('ZIP 結構無效');
+  const total = view.getUint16(eocd + 10, true);
+  if (total > 5000) throw new Error('ZIP 檔案數量太多（上限 5000）');
+  let cursor = view.getUint32(eocd + 16, true);
+  const decoder = new TextDecoder('utf-8');
+  const files = [];
+  let totalUncompressed = 0;
+  for (let i = 0; i < total; i++) {
+    if (view.getUint32(cursor, true) !== 0x02014b50) throw new Error('ZIP central directory 無效');
+    const flags = view.getUint16(cursor + 8, true);
+    const method = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const uncompressedSize = view.getUint32(cursor + 24, true);
+    const nameLen = view.getUint16(cursor + 28, true);
+    const extraLen = view.getUint16(cursor + 30, true);
+    const commentLen = view.getUint16(cursor + 32, true);
+    const localOffset = view.getUint32(cursor + 42, true);
+    const rawName = decoder.decode(bytes.subarray(cursor + 46, cursor + 46 + nameLen));
+    const relativePath = safeZipEntryPath(rawName);
+    cursor += 46 + nameLen + extraLen + commentLen;
+    if (!relativePath || rawName.endsWith('/') || relativePath.startsWith('__MACOSX/')) continue;
+    if (flags & 1) throw new Error('ZIP 受密碼保護，請先移除密碼');
+    if (compressedSize === 0xffffffff || uncompressedSize === 0xffffffff) throw new Error('暫不支援 ZIP64');
+    if (uncompressedSize > 100 * 1024 * 1024) throw new Error('ZIP 內單一檔案超過 100MB');
+    totalUncompressed += uncompressedSize;
+    if (totalUncompressed > 300 * 1024 * 1024) throw new Error('ZIP 解壓後總容量超過 300MB');
+    if (view.getUint32(localOffset, true) !== 0x04034b50) throw new Error('ZIP local entry 無效');
+    const localNameLen = view.getUint16(localOffset + 26, true);
+    const localExtraLen = view.getUint16(localOffset + 28, true);
+    const start = localOffset + 30 + localNameLen + localExtraLen;
+    const packed = bytes.slice(start, start + compressedSize);
+    let unpacked;
+    if (method === 0) {
+      unpacked = packed;
+    } else if (method === 8 && typeof DecompressionStream !== 'undefined') {
+      const stream = new Blob([packed]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      unpacked = new Uint8Array(await new Response(stream).arrayBuffer());
+    } else {
+      throw new Error('ZIP 內含瀏覽器暫不支援嘅壓縮格式：' + method);
+    }
+    const baseName = relativePath.split('/').pop();
+    const extracted = new File([unpacked], baseName, { type: guessMime(baseName), lastModified: file.lastModified });
+    Object.defineProperty(extracted, 'webkitRelativePath', { value: relativePath, configurable: true });
+    files.push(extracted);
+  }
+  return files;
+}
 function detectTierPrizeTable(matrices) {
   const prizes = {};
   const addPrizeRow = (row, tierCol, tcCol, enCol) => {
@@ -1966,11 +2024,23 @@ function detectTierPrizeTable(matrices) {
     });
     if (usedHeader) return;
     // Headerless/merged-header format: Tier label, Chinese reward, English reward.
+    // Agency reward sheets may instead contain one language-neutral product name
+    // plus blank/price columns (for example Tier 3-4 | Petits Fours | | $92).
     matrix.forEach(row => {
-      if (row.length < 3 || !normalizeTierId(wordCellText(row[0]))) return;
+      if (row.length < 2 || !normalizeTierId(wordCellText(row[0]))) return;
       const tcEvidence = wordLanguageEvidence(wordCellText(row[1]));
       const enEvidence = wordLanguageEvidence(wordCellText(row[2]));
-      if (tcEvidence.cjk > 0 && enEvidence.latinWords > 0) addPrizeRow(row, 0, 1, 2);
+      if (tcEvidence.cjk > 0 && enEvidence.latinWords > 0) {
+        addPrizeRow(row, 0, 1, 2);
+        return;
+      }
+      const neutral = row.slice(1).map(wordCellText).find(value =>
+        value && /[A-Za-z㐀-鿿]/.test(value) && !/^(?:HK)?\$?\s*[\d,.]+$/.test(value)
+      );
+      if (neutral) {
+        const tier = normalizeTierId(wordCellText(row[0]));
+        prizes[tier] = { TC: neutral, EN: neutral, neutral: true };
+      }
     });
   });
   return prizes;
@@ -2005,9 +2075,12 @@ function isDynamicMasterSegment(text) {
 }
 function cleanMasterSegment(text) {
   return String(text || '').replace(/\[button\]/gi, '').replace(/【\s*button\s*】/gi, '')
+    .replace(/\s*[\(（]\s*button\s*[\)）]\s*/gi, ' ')
     // Agency-only production note: it selects one of the adjacent Tier gift alternatives
     // and is not approved customer-facing copy.
     .replace(/\s*\(\s*Based on related tier\s*\)\s*/gi, ' ')
+    // Word production label before the real image caption, not customer-facing copy.
+    .replace(/^\s*(?:Gift box image|禮盒圖片|禮物圖片|獎品圖片)(?=\s|$)\s*/i, '')
     // A slash at the END of a Word segment is an alternative separator, not product copy.
     // Internal slashes remain untouched.
     .replace(/\s*[/／]\s*$/, '')
@@ -2087,6 +2160,20 @@ function approvedWordSourceForMail(master, lang, fileName) {
     : null;
   return audienceSource && audienceSource.length ? audienceSource : (lang === 'TC' ? master.tc : master.en);
 }
+function prizeIdentityKey(text) {
+  const value = cleanMasterSegment(text).toLowerCase()
+    .replace(/[‐‑‒–—−]/g, '-').replace(/\s+/g, ' ');
+  if (/petits?\s+fours?|迷你法式水果撻/.test(value)) return 'agnes-petits-fours';
+  if (/palmier|蝴蝶酥(?:禮盒)?/.test(value)) return 'agnes-palmier';
+  return '';
+}
+function approvedPrizeMatchesEmail(prizeText, emailText, lang) {
+  const expected = compactCopy(prizeText);
+  const body = compactCopy(emailText);
+  if (expected && body.includes(expected)) return true;
+  const identity = prizeIdentityKey(prizeText);
+  return !!identity && prizeIdentityKey(emailText) === identity;
+}
 function checkApprovedWordCopy(mail, tierId, master) {
   if (!master) return [];
   const lang = detectCopyLanguage(mail);
@@ -2146,10 +2233,9 @@ function checkApprovedWordCopy(mail, tierId, master) {
   });
   const expectedPrize = findTierPrize(master.tierPrizes, tierId, lang);
   if (expectedPrize) {
-    const body = emailCompact;
-    if (!body.includes(compactCopy(expectedPrize.text))) {
+    if (!approvedPrizeMatchesEmail(expectedPrize.text, emailFullText, lang)) {
       const wrong = Object.entries(master.tierPrizes).find(([otherTier, value]) =>
-        otherTier !== tierId && value[lang] && body.includes(compactCopy(value[lang]))
+        otherTier !== tierId && value[lang] && approvedPrizeMatchesEmail(value[lang], emailFullText, lang)
       );
       issues.push({
         severity: 'err', category: 'Word Tier獎品',
@@ -2320,10 +2406,28 @@ async function readDroppedEntry(entry, parentPath = '') {
   return nested.flat(Infinity);
 }
 
-async function handleFolder(fileList) {
+async function handleZipFile(file) {
+  const entries = await readZipPackageFiles(file);
+  const htmlEntries = entries.filter(entry => /\.(?:html?|xml)$/i.test(entry.name));
+  if (!htmlEntries.length) throw new Error('ZIP 入面搵唔到 index.html／HTML／XML');
+  const pathOf = entry => entry.webkitRelativePath || entry.name;
+  const preferred = htmlEntries.find(entry => /^index\.html?$/i.test(pathOf(entry)))
+    || htmlEntries.find(entry => /(?:^|\/)index\.html?$/i.test(pathOf(entry)))
+    || (htmlEntries.length === 1 ? htmlEntries[0] : null);
+  const selected = preferred ? [preferred] : htmlEntries;
+  const archiveBase = file.name.replace(/\.zip$/i, '');
+  await handleFolder(entries, {
+    htmlPaths: new Set(selected.map(pathOf)),
+    displayName: selected.length === 1 ? archiveBase + '.html' : '',
+    sourceLabel: 'ZIP',
+  });
+}
+
+async function handleFolder(fileList, options = {}) {
   const files = Array.from(fileList);
   if (files.length === 0) return;
-  const htmlFiles = files.filter(f => /\.(?:html?|xml)$/i.test(f.name));
+  let htmlFiles = files.filter(f => /\.(?:html?|xml)$/i.test(f.name));
+  if (options.htmlPaths) htmlFiles = htmlFiles.filter(f => options.htmlPaths.has(f.webkitRelativePath || f.name));
   const cssFiles  = files.filter(f => /\.css$/i.test(f.name));
   const otherFiles = files.filter(f => !htmlFiles.includes(f) && !cssFiles.includes(f));
   if (htmlFiles.length === 0) { alert('資料夾入面搵唔到 .html / .xml 檔案'); return; }
@@ -2361,8 +2465,9 @@ async function handleFolder(fileList) {
     const text = /\.xml$/i.test(htmlFile.name) ? extractHtmlFromXml(sourceText) : sourceText;
     if (/\.xml$/i.test(htmlFile.name) && !/<(?:html|body|table|div|p|img|style|link)\b/i.test(text)) continue;
     const rewritten = rewriteAssets(text, assetMap, htmlFile);
-    const parsed = { fileName: htmlFile.name, subject: `[Folder] ${htmlFile.name}`, html: rewritten };
-    addToState({ name: htmlFile.name }, parsed);
+    const displayName = options.displayName && htmlFiles.length === 1 ? options.displayName : htmlFile.name;
+    const parsed = { fileName: displayName, subject: '[' + (options.sourceLabel || 'Folder') + '] ' + displayName, html: rewritten };
+    addToState({ name: displayName }, parsed);
   }
   renderFiles();
 }
@@ -2424,6 +2529,7 @@ runBtn.onclick = () => runChecks();
 async function handleFiles(fileList) {
   for (const file of fileList) {
     try {
+      if (/\.zip$/i.test(file.name)) { await handleZipFile(file); continue; }
       const parsed = await parseEmlFile(file);
       addToState(file, parsed);
     } catch (err) { alert('無法讀取 ' + file.name + '：' + err.message); }
@@ -2433,8 +2539,10 @@ async function handleFiles(fileList) {
 
 function addToState(file, parsed, sourceUrl) {
   let guess = null;
-  const m = parsed.html && parsed.html.match(/_(T[0-9]+(?:-[0-9]+)?)_(?:[a-zA-Z0-9]+_)?(?:EN|TC)\.html/i);
-  if (m) guess = normalizeTierId(m[1]);
+  const fileTier = String(parsed.fileName || file.name || '').match(/(?:^|[_-])(T[0-9]+(?:-[0-9]+)?)(?=$|[_-])/i);
+  const htmlTier = parsed.html && parsed.html.match(/_(T[0-9]+(?:-[0-9]+)?)_(?:[a-zA-Z0-9]+_)?(?:EN|TC)\.html/i);
+  const tierMatch = fileTier || htmlTier;
+  if (tierMatch) guess = normalizeTierId(tierMatch[1]);
   const mailType = detectMailType(parsed.html);
   state.files.push({
     file, parsed,
@@ -2765,12 +2873,27 @@ function renderOverview() {
     </div>`;
   }
 
+  const tierPrizeCount = state.wordMaster ? Object.keys(state.wordMaster.tierPrizes || {}).length : 0;
+  if (stats.gift > 0) {
+    const checkedByWord = !!state.wordMaster && tierPrizeCount > 0;
+    const noticeColor = checkedByWord ? '#43a047' : '#8e24aa';
+    const noticeTitle = checkedByWord ? '🎁 Tier 禮物差異已按 Word 核對' : '🎁 偵測到 Tier 禮物不同（待核實）';
+    const noticeText = checkedByWord
+      ? '工具已按檔名／Tier 對照 Word 獎品表；如配錯禮物，會喺對應 Email 顯示「Word Tier獎品」錯誤。'
+      : (state.wordMaster
+        ? '已載入 Word，但未偵測到可用嘅 Tier 獎品表；目前只可通知禮物內容不同，未能判斷邊款先屬於正確 Tier。'
+        : '未上載 approved Word，所以工具只可確認各封 MAIL 禮物不同，不能判斷邊款應屬於邊個 Tier；呢項係提示，唔會當 EDM 錯誤。');
+    html += '<div class="card" style="border-left:4px solid ' + noticeColor + ';">' +
+      '<h2>' + noticeTitle + '</h2><div style="font-size:13px;line-height:1.6;color:#405159;">' +
+      stats.gift + ' 組禮物內容有差異。' + noticeText + '</div></div>';
+  }
+
   // Summary
   html += `<div class="summary">
     <div class="stat err"><span class="icon">🔴</span><div class="num">${stats.mismatch || 0}</div><div class="lbl">真·不一致</div></div>
     <div class="stat warn"><span class="icon">🎨</span><div class="num">${styleDiffRowCount}</div><div class="lbl">字型/CSS不一致段</div></div>
     <div class="stat info"><span class="icon">📌</span><div class="num">${stats.tieronly || 0}</div><div class="lbl">Tier 專屬段（正常）</div></div>
-    <div class="stat" style="background:#faf5fc;"><span class="icon">🎁</span><div class="num" style="color:#8e24aa;">${stats.gift || 0}</div><div class="lbl">禮物內容（正常）</div></div>
+    <div class="stat" style="background:#faf5fc;"><span class="icon">🎁</span><div class="num" style="color:#8e24aa;">${stats.gift || 0}</div><div class="lbl">${tierPrizeCount ? 'Tier禮物差異（Word核對）' : 'Tier禮物不同（待核實）'}</div></div>
     <div class="stat warn"><span class="icon">💱</span><div class="num">${stats.variant || 0}</div><div class="lbl">只係變數不同（正常）</div></div>
     <div class="stat ok"><span class="icon">✅</span><div class="num">${stats.identical || 0}</div><div class="lbl">完全一致</div></div>
   </div>`;
@@ -2784,11 +2907,11 @@ function renderOverview() {
       <span class="lg"><span class="dot variant"></span>只係變數（正常）</span>
       <span class="lg"><span class="dot mismatch"></span>真·不一致</span>
       <span class="lg"><span class="dot tieronly"></span>Tier 專屬（正常）</span>
-      <span class="lg"><span class="dot gift"></span>🎁 禮物內容（正常）</span>
+      <span class="lg"><span class="dot gift"></span>🎁 Tier禮物不同（提示）</span>
     </div>`;
     html += `<div class="filters" id="filters">
       <span class="chip ${state.filter==='mismatch'?'active':''}" data-filter="mismatch">🔴 真·不一致 (${stats.mismatch||0})</span>
-      <span class="chip ${state.filter==='issues'?'active':''}"   data-filter="issues">⚠️ 有問題嘅段 (${(stats.mismatch||0) + styleDiffRowCount})</span>
+      <span class="chip ${state.filter==='issues'?'active':''}"   data-filter="issues">⚠️ 差異／問題段 (${(stats.mismatch||0) + (stats.gift||0) + styleDiffRowCount})</span>
       <span class="chip ${state.filter==='all'?'active':''}"      data-filter="all">📋 所有段 (${rows.length})</span>
     </div>`;
     html += renderAlignTable(rows, fileNames, tiers);
@@ -2855,7 +2978,7 @@ function renderAlignTable(rows, fileNames, tiers) {
     if (state.filter === 'mismatch') return r.kind === 'mismatch';
     if (state.filter === 'issues') {
       const hasStyle = (r.styleDiffsMobile?.length || 0) + (r.styleDiffsDesktop?.length || 0) > 0;
-      return r.kind === 'mismatch' || (hasStyle && r.kind !== 'tieronly' && r.kind !== 'gift');
+      return r.kind === 'mismatch' || r.kind === 'gift' || (hasStyle && r.kind !== 'tieronly' && r.kind !== 'gift');
     }
     return true;
   });
@@ -2897,7 +3020,7 @@ function renderAlignTable(rows, fileNames, tiers) {
   return html;
 }
 
-function kindLabel(k) { return { identical: '一致', variant: '只係變數', mismatch: '真·不一致', tieronly: 'Tier 專屬', gift: '🎁 禮物內容', empty: '' }[k] || k; }
+function kindLabel(k) { return { identical: '一致', variant: '只係變數', mismatch: '真·不一致', tieronly: 'Tier 專屬', gift: '🎁 Tier禮物不同', empty: '' }[k] || k; }
 function highlightTierVars(text) {
   const patterns = [/HK\$\s?[\d,]+(?:\.\d+)?/g, /\bT[0-6](?:-[0-6])?\b/g, /\b(Essential|Bronze|Silver|Gold|Platinum|Diamond|Diamond Plus)\b/gi, /(基本級|寶銅|白銀|黃金級|鉑金|鑽石級|尊尚鑽石級)/g];
   let escaped = escapeHtml(text);
