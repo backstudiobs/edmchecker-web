@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.21.2</title>
+<title>SUN仔 EDM及 Website 小助手 v3.22</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -254,6 +254,22 @@
   .preview-frame.width-full { width: 100%; }
   .preview-empty { padding: 60px; text-align: center; color: #b0bac1; }
 
+  /* ==================== MULTI-PAGE SYNC PREVIEW ==================== */
+  #panel-multi { width: min(calc(100vw - 28px), 2600px); position: relative; left: 50%; transform: translateX(-50%); }
+  .multi-preview-shell { height: calc(100vh - 235px); min-height: 560px; background: #fff; border: 1px solid #dbe2e5; display: flex; flex-direction: column; overflow: hidden; }
+  .multi-preview-toolbar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 14px; background: #fffaf0; border-bottom: 1px solid #e3d9bd; font-size: 12px; color: #61717a; }
+  .multi-preview-toolbar strong { color: #003946; }
+  .multi-tool-group { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .multi-tool-btn { border: 1px solid #bdcbd0; background: #fff; color: #405159; padding: 6px 10px; min-height: 31px; cursor: pointer; font-size: 11px; border-radius: 2px; }
+  .multi-tool-btn:hover { border-color: #004c5b; background: #fff6d9; }
+  .multi-tool-btn.active { background: #004c5b; color: #fff; border-color: #004c5b; }
+  .multi-preview-grid { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 12px; overflow-x: auto; overflow-y: hidden; padding: 12px; background: #e9eeef; }
+  .multi-preview-card { flex: 0 0 var(--multi-frame-width); min-width: var(--multi-frame-width); display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 1px solid #bdcbd0; box-shadow: 0 2px 10px rgba(0,57,70,.09); }
+  .multi-preview-card-header { flex: 0 0 auto; min-height: 54px; padding: 8px 10px; border-bottom: 3px solid #f5b800; background: #fff; font-size: 11px; color: #61717a; line-height: 1.35; }
+  .multi-preview-card-header .title { margin-top: 4px; color: #20292d; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .multi-preview-card-header .tier { color: #fff; background: #004c5b; padding: 2px 7px; margin-right: 6px; }
+  .multi-preview-frame { flex: 1; min-height: 0; width: 100%; border: 0; background: #fff; }
+
   /* ==================== RULES PANEL ==================== */
   .rules-content { font-size: 14px; line-height: 1.7; color: #4a5860; }
   .rules-content h3 { color: #003946; margin: 20px 0 8px 0; font-size: 14px; }
@@ -412,6 +428,8 @@
     .preview-sidebar { margin-bottom: 14px; max-height: 330px; }
     .preview-main { height: 72vh; min-height: 540px; }
     .preview-toolbar { align-items: flex-start; }
+    #panel-multi { width: calc(100vw - 20px); }
+    .multi-preview-shell { height: 75vh; min-height: 520px; }
   }
 
   @media (max-width: 520px) {
@@ -434,7 +452,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.21.2</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.22</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -443,10 +461,11 @@
       <span>Mobile + Desktop QA</span>
     </div>
   </div>
-  <div class="sub">Drop 多封 .eml，一鍵check：語言連結、字型、標點、跨MAIL文字一致性；可切換 side-by-side 對照或全圖預覽 + 貼memo</div>
+  <div class="sub">Drop 多封 .eml，一鍵check：語言連結、字型、標點、跨MAIL文字一致性；可切換 side-by-side、全圖貼memo或多頁同步預覽</div>
   <div class="app-tabs">
     <button data-tab="overview" class="active">📊 概覽</button>
     <button data-tab="preview" disabled>📄 全圖預覽 <span style="font-size:10px;opacity:.6;">(run先開)</span></button>
+    <button data-tab="multi" disabled>▥ 多頁同步預覽 <span style="font-size:10px;opacity:.6;">(run先開)</span></button>
     <button data-tab="rules">⚙️ 規則說明</button>
   </div>
 </div>
@@ -490,6 +509,11 @@
     <div id="previewContainer">
       <div class="empty">請先喺「概覽」執行檢查</div>
     </div>
+  </section>
+
+  <!-- ==================== MULTI-PAGE SYNC PREVIEW ==================== -->
+  <section class="panel" id="panel-multi">
+    <div id="multiPreviewContainer"><div class="empty">請先喺「概覽」執行檢查</div></div>
   </section>
 
   <!-- ==================== RULES ==================== -->
@@ -542,7 +566,8 @@
         </ul>
         <h3>Viewport 切換</h3>
         <ul>
-          <li>Preview toolbar：📱 375 / 📱 768 / 💻 Full — 切換iframe寬度，睇responsive layout差異</li>
+          <li>全圖 Preview toolbar：📱 375 / 📱 768 / 💻 Full — 切換單頁 iframe 寬度，睇 responsive layout 差異</li>
+          <li><b>多頁同步預覽：</b>所有已檢查頁面以乾淨原稿並排顯示；可選 375／768／1200 viewport。喺任何一頁用滑鼠上下滾動，其餘頁面會同步到相同 pixel 位置；可關閉同步或全部回頂。</li>
         </ul>
         <h3>跨MAIL (Cross-email)</h3>
         <ul>
@@ -2137,9 +2162,16 @@ const state = {
   activeTab: 'overview',
   previewMailIdx: 0,
   previewWidth: 'full',      // 'full' | '768' | '375'
+  multiPreviewWidth: '375',  // clean side-by-side viewport width
+  multiSyncScroll: true,
+  multiScrollTop: 0,
   lastResult: null,          // populated on runChecks
   wordMaster: null,          // optional approved DOCX master; no effect when absent
 };
+
+function setResultTabsDisabled(disabled) {
+  document.querySelectorAll('[data-tab="preview"], [data-tab="multi"]').forEach(btn => { btn.disabled = disabled; });
+}
 
 // ========================================================================
 // UI: TAB SWITCHING
@@ -2152,6 +2184,7 @@ document.querySelectorAll('.app-tabs button').forEach(btn => {
     document.querySelectorAll('.app-tabs button').forEach(b => b.classList.toggle('active', b === btn));
     document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
     if (tab === 'preview' && state.lastResult) renderPreview();
+    if (tab === 'multi' && state.lastResult) renderMultiPreview();
   };
 });
 
@@ -2194,7 +2227,7 @@ wordInput.onchange = async e => {
     state.wordMaster = await parseApprovedWord(file);
     state.lastResult = null;
     reportContainer.innerHTML = '';
-    document.querySelector('[data-tab="preview"]').disabled = true;
+    setResultTabsDisabled(true);
   } catch (err) {
     state.wordMaster = null;
     alert('無法讀取 approved Word：' + err.message);
@@ -2205,7 +2238,7 @@ wordRemoveBtn.onclick = () => {
   state.wordMaster = null;
   state.lastResult = null;
   reportContainer.innerHTML = '';
-  document.querySelector('[data-tab="preview"]').disabled = true;
+  setResultTabsDisabled(true);
   renderWordMasterStatus();
 };
 
@@ -2375,7 +2408,7 @@ function guessMime(name) {
     ttf:'font/ttf', otf:'font/otf', eot:'application/vnd.ms-fontobject',
   })[ext] || 'application/octet-stream';
 }
-clearBtn.onclick = () => { state.files = []; state.wordMaster = null; state.lastResult = null; renderFiles(); renderWordMasterStatus(); reportContainer.innerHTML = ''; document.querySelector('[data-tab="preview"]').disabled = true; };
+clearBtn.onclick = () => { state.files = []; state.wordMaster = null; state.lastResult = null; state.multiScrollTop = 0; renderFiles(); renderWordMasterStatus(); reportContainer.innerHTML = ''; setResultTabsDisabled(true); };
 runBtn.onclick = () => runChecks();
 
 async function handleFiles(fileList) {
@@ -2683,7 +2716,7 @@ async function runChecks() {
 
     state.lastResult = { sorted, mails, tiers, fileNames, singlePerMail, rows, stats, styleDiffRowCount, perMailAnnotations, perMailImgAnnotations };
 
-    document.querySelector('[data-tab="preview"]').disabled = state.files.length === 0;
+    setResultTabsDisabled(state.files.length === 0);
     renderOverview();
   } catch (err) {
     console.error('EDM checker run failed', err);
@@ -3071,6 +3104,106 @@ function renderPreview() {
       };
     });
   }, { once: true });
+}
+
+// ========================================================================
+// RENDER: MULTI-PAGE SYNCHRONIZED PREVIEW
+// ========================================================================
+function multiFrameMaxScrollTop(frame) {
+  const win = frame && frame.contentWindow;
+  const doc = frame && frame.contentDocument;
+  if (!win || !doc) return 0;
+  const root = doc.documentElement, body = doc.body;
+  const height = Math.max(root ? root.scrollHeight : 0, body ? body.scrollHeight : 0);
+  return Math.max(0, height - win.innerHeight);
+}
+function syncMultiScrollFrames(frames, sourceFrame, expectedPositions) {
+  if (!sourceFrame || !sourceFrame.contentWindow) return 0;
+  const sourceTop = Math.max(0, Math.round(sourceFrame.contentWindow.scrollY || 0));
+  state.multiScrollTop = sourceTop;
+  let moved = 0;
+  frames.forEach(frame => {
+    if (frame === sourceFrame || !frame.contentWindow) return;
+    const targetTop = Math.min(sourceTop, multiFrameMaxScrollTop(frame));
+    expectedPositions.set(frame, targetTop);
+    frame.contentWindow.scrollTo(0, targetTop);
+    moved++;
+  });
+  return moved;
+}
+function renderMultiPreview() {
+  const container = document.getElementById('multiPreviewContainer');
+  const ctx = state.lastResult;
+  if (!ctx) { container.innerHTML = '<div class="empty">請先執行檢查</div>'; return; }
+  const { mails, tiers, fileNames } = ctx;
+  const width = ['375', '768', '1200'].includes(state.multiPreviewWidth) ? state.multiPreviewWidth : '375';
+  let html = `<div class="multi-preview-shell">
+    <div class="multi-preview-toolbar">
+      <div><strong>▥ ${mails.length} 頁同步預覽</strong> · 乾淨原稿，唔插 memo · 相同 pixel 位置對版</div>
+      <div class="multi-tool-group">
+        <button class="multi-tool-btn ${state.multiSyncScroll ? 'active' : ''}" id="multiSyncBtn">${state.multiSyncScroll ? '🔗 同步滾動：開' : '🔓 同步滾動：關'}</button>
+        <button class="multi-tool-btn" id="multiTopBtn">↑ 全部回頂</button>
+        <span style="margin-left:5px;">Viewport</span>
+        ${['375','768','1200'].map(v => `<button class="multi-tool-btn ${width === v ? 'active' : ''}" data-multi-width="${v}">${v === '375' ? '📱 375' : v === '768' ? '📱 768' : '💻 1200'}</button>`).join('')}
+      </div>
+    </div>
+    <div class="multi-preview-grid" style="--multi-frame-width:${Number(width)}px">`;
+  mails.forEach((mail, index) => {
+    const tier = tiers[index] ? tiers[index].id : `MAIL#${index + 1}`;
+    html += `<article class="multi-preview-card">
+      <header class="multi-preview-card-header"><span class="tier">${escapeHtml(tier)}</span> PAGE ${index + 1}
+        <div class="title" title="${escapeHtml(fileNames[index])}">${escapeHtml(fileNames[index])}</div>
+      </header>
+      <iframe class="multi-preview-frame" data-multi-index="${index}" sandbox="allow-same-origin" title="${escapeHtml(fileNames[index])}"></iframe>
+    </article>`;
+  });
+  html += `</div></div>`;
+  container.innerHTML = html;
+
+  const frames = Array.from(container.querySelectorAll('.multi-preview-frame'));
+  const expectedPositions = new WeakMap();
+  frames.forEach((frame, index) => {
+    frame.addEventListener('load', () => {
+      const win = frame.contentWindow;
+      if (!win) return;
+      const initialTop = Math.min(state.multiScrollTop, multiFrameMaxScrollTop(frame));
+      expectedPositions.set(frame, initialTop);
+      win.scrollTo(0, initialTop);
+      win.addEventListener('scroll', () => {
+        const actualTop = Math.max(0, Math.round(win.scrollY || 0));
+        const expected = expectedPositions.get(frame);
+        if (expected != null && Math.abs(actualTop - expected) <= 1) {
+          expectedPositions.delete(frame);
+          return;
+        }
+        expectedPositions.delete(frame);
+        state.multiScrollTop = actualTop;
+        if (state.multiSyncScroll) syncMultiScrollFrames(frames, frame, expectedPositions);
+      }, { passive: true });
+    }, { once: true });
+    frame.srcdoc = mails[index].html;
+  });
+
+  container.querySelector('#multiSyncBtn').onclick = e => {
+    state.multiSyncScroll = !state.multiSyncScroll;
+    e.currentTarget.classList.toggle('active', state.multiSyncScroll);
+    e.currentTarget.textContent = state.multiSyncScroll ? '🔗 同步滾動：開' : '🔓 同步滾動：關';
+    if (state.multiSyncScroll && frames[0]) syncMultiScrollFrames(frames, frames[0], expectedPositions);
+  };
+  container.querySelector('#multiTopBtn').onclick = () => {
+    state.multiScrollTop = 0;
+    frames.forEach(frame => {
+      if (!frame.contentWindow) return;
+      expectedPositions.set(frame, 0);
+      frame.contentWindow.scrollTo(0, 0);
+    });
+  };
+  container.querySelectorAll('[data-multi-width]').forEach(btn => {
+    btn.onclick = () => {
+      state.multiPreviewWidth = btn.dataset.multiWidth;
+      renderMultiPreview();
+    };
+  });
 }
 
 // ========================================================================
