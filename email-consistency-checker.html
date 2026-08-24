@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.21.1</title>
+<title>SUN仔 EDM及 Website 小助手 v3.21.2</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -434,7 +434,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.21.1</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.21.2</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -499,7 +499,7 @@
       <div class="rules-content">
         <h3>單封MAIL (Single-email)</h3>
         <ul>
-          <li><b>Approved Word（可選）：</b>上載 `.docx` 後，自動讀 TC／EN EDM 文案表；有 TC／EN 表頭會直接使用，無表頭時會按中英文內容自動辨認欄位。Word 有 Enrolled／Not Enrolled 區塊時，會按檔名 <code>_E_</code>／<code>_NE_</code> 自動揀相應文案。另支援 Reward 表內嘅 Tier 1／Tier 2-4／Tier 5-6 獎品格式。無 Word 時不影響任何舊規則。</li>
+          <li><b>Approved Word（可選）：</b>上載 `.docx` 後，自動讀 TC／EN EDM 文案表；有 TC／EN 表頭會直接使用，無表頭時會按中英文內容自動辨認欄位。Word 有 Enrolled／Not Enrolled 區塊時，會按檔名 <code>_E_</code>／<code>_NE_</code> 自動揀相應文案。另支援 Reward 表內嘅 Tier 1／Tier 2-4／Tier 5-6 獎品格式。Word 內 <code>(Based on related tier)</code> 會視為製作備註；Tier 禮品選項之間嘅行尾 <code>/</code> 會視為 separator。無 Word 時不影響任何舊規則。</li>
           <li><b>語言連結：</b>右上角「EN/繁體」link 指向嘅 <code>*_T{tier}_*_(EN|TC).html</code>，check 有無對應到你揀嘅 tier；支援單 Tier（T1…T6）同組合 Tier（例如 T1-2／T2-4／T5-6）</li>
           <li><b>多餘空白：</b>中文字之間嘅單一／連續空格（包括 <code>&amp;nbsp;</code>、全形空格）、句末 <code>&amp;nbsp;</code>、連續2+空格</li>
           <li><b>標點：</b>中文段落用咗半形標點（,.!?()）、成對符號未閉合（「」『』（））</li>
@@ -720,9 +720,13 @@ function maskTierVariables(text) {
 }
 
 // Gift/reward keywords — differences in these segments are EXPECTED (tier gets different gifts)
-const GIFT_PATTERNS = /(?:電子禮券|禮券|e[‐\-]?Voucher|e[‐\-]?Cash|現金券|兌換券|Asia Miles|亞洲萬里通|里數|Starbucks|星巴克|Maxim|美心|PARKn?SHOP|百佳|Uber|7[‐\-]?Eleven|KFC|麥當勞|HKTV[a-z]*|Voucher|Coupon|時尚生活)/i;
+const GIFT_PATTERNS = /(?:電子禮券|禮券|e[‐‑‒–—−\-]?Voucher|e[‐‑‒–—−\-]?Cash|現金券|兌換券|Asia Miles|亞洲萬里通|里數|Starbucks|星巴克|Maxim|美心|PARKn?SHOP|百佳|Uber|7[‐‑‒–—−\-]?Eleven|KFC|麥當勞|HKTV[a-z]*|Voucher|Coupon|時尚生活)/i;
 function isGiftItem(text) { return GIFT_PATTERNS.test(text); }
-const GIFT_VALUE_PATTERNS = /(?:電子現金券|電子禮券|禮券|e[‐\-]?Voucher|e[‐\-]?Cash|現金券|兌換券|Asia Miles|亞洲萬里通|里數|Starbucks|星巴克|Maxim|美心|PARKn?SHOP|百佳|Uber|7[‐\-]?Eleven|KFC|麥當勞|HKTV[a-z]*|Voucher|Coupon|時尚生活)/gi;
+function isStandaloneTierGiftName(text) {
+  const value = String(text || '').replace(/\s+/g, ' ').trim();
+  return /^agnès b\.\s+.+\s+e[‐‑‒–—−\-]?Voucher[。.]?$/i.test(value);
+}
+const GIFT_VALUE_PATTERNS = /(?:電子現金券|電子禮券|禮券|e[‐‑‒–—−\-]?Voucher|e[‐‑‒–—−\-]?Cash|現金券|兌換券|Asia Miles|亞洲萬里通|里數|Starbucks|星巴克|Maxim|美心|PARKn?SHOP|百佳|Uber|7[‐‑‒–—−\-]?Eleven|KFC|麥當勞|HKTV[a-z]*|Voucher|Coupon|時尚生活)/gi;
 function normalizeRewardSlots(text) {
   return String(text || '').replace(
     /完成登記即可獲享[\s\S]*?([，,]\s*率先開啟您的專屬禮遇之旅[。.]?)/g,
@@ -818,6 +822,12 @@ function classifyRow(cells) {
   const anyGift = present.some(p => isGiftItem(p.text));
   if (present.length < cells.length) {
     return anyGift ? 'gift' : 'tieronly';
+  }
+  // A complete product title is itself the Tier-variable slot. Comparing the remaining
+  // brand/product words would turn two valid Tier gifts into a false cross-mail mismatch.
+  if (present.every(p => isStandaloneTierGiftName(p.text))) {
+    const rawSame = present.every(p => p.text === present[0].text);
+    return rawSame ? 'identical' : 'gift';
   }
   const keys = present.map(p => p.key);
   const allKeysSame = keys.every(k => k === keys[0]);
@@ -1961,7 +1971,32 @@ function isDynamicMasterSegment(text) {
 }
 function cleanMasterSegment(text) {
   return String(text || '').replace(/\[button\]/gi, '').replace(/【\s*button\s*】/gi, '')
+    // Agency-only production note: it selects one of the adjacent Tier gift alternatives
+    // and is not approved customer-facing copy.
+    .replace(/\s*\(\s*Based on related tier\s*\)\s*/gi, ' ')
+    // A slash at the END of a Word segment is an alternative separator, not product copy.
+    // Internal slashes remain untouched.
+    .replace(/\s*[/／]\s*$/, '')
     .replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function collectTierAlternativeGiftGroups(source) {
+  const groups = [], consumed = new Set();
+  source.forEach((raw, index) => {
+    if (!/\(\s*Based on related tier\s*\)/i.test(String(raw || ''))) return;
+    const withoutRemark = String(raw || '').replace(/\s*\(\s*Based on related tier\s*\)\s*/gi, ' ').trim();
+    const currentParts = withoutRemark.split(/\s*[/／]\s*/).map(cleanMasterSegment).filter(Boolean);
+    if (currentParts.length >= 2 && currentParts.every(isGiftItem)) {
+      groups.push(currentParts); consumed.add(index); return;
+    }
+    if (currentParts.length !== 1 || !isGiftItem(currentParts[0]) || index === 0) return;
+    const previousRaw = String(source[index - 1] || '');
+    if (!/[/／]\s*$/.test(previousRaw)) return;
+    const previous = cleanMasterSegment(previousRaw);
+    if (!previous || !isGiftItem(previous)) return;
+    groups.push([previous, currentParts[0]]);
+    consumed.add(index - 1); consumed.add(index);
+  });
+  return { groups, consumed };
 }
 function compactCopy(text) {
   return cleanMasterSegment(text)
@@ -2027,7 +2062,8 @@ function checkApprovedWordCopy(mail, tierId, master) {
     const subjectKey = compactCopy(master.subjects[lang]);
     source = source.filter(text => compactCopy(text) !== subjectKey);
   }
-  const masterSegments = [...new Set(source.map(cleanMasterSegment))]
+  const tierAlternatives = collectTierAlternativeGiftGroups(source);
+  const masterSegments = [...new Set(source.map((text, index) => tierAlternatives.consumed.has(index) ? '' : cleanMasterSegment(text)))]
     .filter(text => text.length >= 8 && !isDynamicMasterSegment(text) && !/^[\d\s☐☑✓✔•|+()*_.-]+$/.test(text));
   const emailDoc = parseDom(mail.html);
   const emailParas = extractParagraphs(emailDoc);
@@ -2063,6 +2099,16 @@ function checkApprovedWordCopy(mail, tierId, master) {
         message: `<b>${lang}</b> approved Word 有呢段，但 Email 搵唔到對應內容<div class="ecm-snippet">${escapeHtml(expected)}</div>`,
       });
     }
+  });
+  // A Word line marked "Based on related tier" may list alternatives as either
+  // "Gift A / Gift B (remark)" or two adjacent segments where Gift A ends in "/".
+  // One matching alternative is sufficient; the separator and remark are not copy.
+  tierAlternatives.groups.forEach(alternatives => {
+    if (alternatives.some(option => emailExact.includes(wordExactKey(option, lang)))) return;
+    issues.push({
+      severity: 'warn', category: 'Word Tier文案缺少',
+      message: `<b>${lang}</b> approved Word 指定按 Tier 使用以下其中一款，但 Email 全部搵唔到<div class="ecm-snippet">${alternatives.map(escapeHtml).join(' / ')}</div>`,
+    });
   });
   const expectedPrize = findTierPrize(master.tierPrizes, tierId, lang);
   if (expectedPrize) {
