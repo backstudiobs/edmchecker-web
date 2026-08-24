@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.24</title>
+<title>SUN仔 EDM及 Website 小助手 v3.24.1</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.24</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.24.1</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -2282,7 +2282,14 @@ document.querySelectorAll('.app-tabs button').forEach(btn => {
     document.querySelectorAll('.app-tabs button').forEach(b => b.classList.toggle('active', b === btn));
     document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
     if (tab === 'preview' && state.lastResult) renderPreview();
-    if (tab === 'multi' && state.lastResult) renderMultiPreview();
+    if (tab === 'multi' && state.lastResult) {
+      try {
+        renderMultiPreview();
+      } catch (err) {
+        console.error('Multi-page preview render failed', err);
+        document.getElementById('multiPreviewContainer').innerHTML = `<div class="empty" style="color:#c62828;">⚠️ 多頁預覽未能顯示：${escapeHtml(err && err.message ? err.message : String(err))}</div>`;
+      }
+    }
   };
 });
 
@@ -3326,7 +3333,7 @@ function renderMultiPreview() {
   const container = document.getElementById('multiPreviewContainer');
   const ctx = state.lastResult;
   if (!ctx) { container.innerHTML = '<div class="empty">請先執行檢查</div>'; return; }
-  const { mails, tiers, fileNames } = ctx;
+  const { sorted, mails, tiers, fileNames } = ctx;
   const order = normalizedMultiPreviewOrder(mails.length);
   state.multiPreviewOrder = order;
   const width = ['375', '768', '1200'].includes(state.multiPreviewWidth) ? state.multiPreviewWidth : '375';
