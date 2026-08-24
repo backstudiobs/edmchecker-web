@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.22</title>
+<title>SUN仔 EDM及 Website 小助手 v3.22.1</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -264,8 +264,17 @@
   .multi-tool-btn:hover { border-color: #004c5b; background: #fff6d9; }
   .multi-tool-btn.active { background: #004c5b; color: #fff; border-color: #004c5b; }
   .multi-preview-grid { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 12px; overflow-x: auto; overflow-y: hidden; padding: 12px; background: #e9eeef; }
-  .multi-preview-card { flex: 0 0 var(--multi-frame-width); min-width: var(--multi-frame-width); display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 1px solid #bdcbd0; box-shadow: 0 2px 10px rgba(0,57,70,.09); }
-  .multi-preview-card-header { flex: 0 0 auto; min-height: 54px; padding: 8px 10px; border-bottom: 3px solid #f5b800; background: #fff; font-size: 11px; color: #61717a; line-height: 1.35; }
+  .multi-preview-card { flex: 0 0 var(--multi-frame-width); min-width: var(--multi-frame-width); display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 1px solid #bdcbd0; box-shadow: 0 2px 10px rgba(0,57,70,.09); transition: opacity .15s, outline-color .15s; }
+  .multi-preview-card.is-dragging { opacity: .52; }
+  .multi-preview-card.is-drop-target { outline: 3px solid #f5b800; outline-offset: -3px; }
+  .multi-preview-card-header { flex: 0 0 auto; min-height: 54px; padding: 8px 10px; border-bottom: 3px solid #f5b800; background: #fff; font-size: 11px; color: #61717a; line-height: 1.35; cursor: grab; user-select: none; }
+  .multi-preview-card-header:active { cursor: grabbing; }
+  .multi-card-topline { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .multi-order-controls { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; }
+  .multi-order-btn { width: 25px; height: 24px; padding: 0; border: 1px solid #bdcbd0; background: #fff; color: #004c5b; cursor: pointer; font-size: 13px; line-height: 1; }
+  .multi-order-btn:hover:not(:disabled) { border-color: #004c5b; background: #fff6d9; }
+  .multi-order-btn:disabled { color: #bdc7cb; background: #f5f7f8; cursor: default; }
+  .multi-drag-handle { color: #718188; font-size: 12px; white-space: nowrap; }
   .multi-preview-card-header .title { margin-top: 4px; color: #20292d; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .multi-preview-card-header .tier { color: #fff; background: #004c5b; padding: 2px 7px; margin-right: 6px; }
   .multi-preview-frame { flex: 1; min-height: 0; width: 100%; border: 0; background: #fff; }
@@ -452,7 +461,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.22</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.22.1</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -2165,6 +2174,7 @@ const state = {
   multiPreviewWidth: '375',  // clean side-by-side viewport width
   multiSyncScroll: true,
   multiScrollTop: 0,
+  multiPreviewOrder: [],     // display-only order of original mail indexes
   lastResult: null,          // populated on runChecks
   wordMaster: null,          // optional approved DOCX master; no effect when absent
 };
@@ -2408,7 +2418,7 @@ function guessMime(name) {
     ttf:'font/ttf', otf:'font/otf', eot:'application/vnd.ms-fontobject',
   })[ext] || 'application/octet-stream';
 }
-clearBtn.onclick = () => { state.files = []; state.wordMaster = null; state.lastResult = null; state.multiScrollTop = 0; renderFiles(); renderWordMasterStatus(); reportContainer.innerHTML = ''; setResultTabsDisabled(true); };
+clearBtn.onclick = () => { state.files = []; state.wordMaster = null; state.lastResult = null; state.multiScrollTop = 0; state.multiPreviewOrder = []; renderFiles(); renderWordMasterStatus(); reportContainer.innerHTML = ''; setResultTabsDisabled(true); };
 runBtn.onclick = () => runChecks();
 
 async function handleFiles(fileList) {
@@ -2715,6 +2725,7 @@ async function runChecks() {
     }
 
     state.lastResult = { sorted, mails, tiers, fileNames, singlePerMail, rows, stats, styleDiffRowCount, perMailAnnotations, perMailImgAnnotations };
+    state.multiPreviewOrder = mails.map((_, index) => index);
 
     setResultTabsDisabled(state.files.length === 0);
     renderOverview();
@@ -3131,15 +3142,39 @@ function syncMultiScrollFrames(frames, sourceFrame, expectedPositions) {
   });
   return moved;
 }
+function normalizedMultiPreviewOrder(count, order = state.multiPreviewOrder) {
+  const seen = new Set();
+  const normalized = [];
+  (Array.isArray(order) ? order : []).forEach(index => {
+    if (!Number.isInteger(index) || index < 0 || index >= count || seen.has(index)) return;
+    seen.add(index);
+    normalized.push(index);
+  });
+  for (let index = 0; index < count; index++) {
+    if (!seen.has(index)) normalized.push(index);
+  }
+  return normalized;
+}
+function moveMultiPreviewOrder(order, fromPosition, toPosition) {
+  const next = Array.isArray(order) ? [...order] : [];
+  if (!Number.isInteger(fromPosition) || !Number.isInteger(toPosition) ||
+      fromPosition < 0 || toPosition < 0 || fromPosition >= next.length || toPosition >= next.length ||
+      fromPosition === toPosition) return next;
+  const [moved] = next.splice(fromPosition, 1);
+  next.splice(toPosition, 0, moved);
+  return next;
+}
 function renderMultiPreview() {
   const container = document.getElementById('multiPreviewContainer');
   const ctx = state.lastResult;
   if (!ctx) { container.innerHTML = '<div class="empty">請先執行檢查</div>'; return; }
   const { mails, tiers, fileNames } = ctx;
+  const order = normalizedMultiPreviewOrder(mails.length);
+  state.multiPreviewOrder = order;
   const width = ['375', '768', '1200'].includes(state.multiPreviewWidth) ? state.multiPreviewWidth : '375';
   let html = `<div class="multi-preview-shell">
     <div class="multi-preview-toolbar">
-      <div><strong>▥ ${mails.length} 頁同步預覽</strong> · 乾淨原稿，唔插 memo · 相同 pixel 位置對版</div>
+      <div><strong>▥ ${mails.length} 頁同步預覽</strong> · 拖住頁頭排序 · 乾淨原稿，唔插 memo · 相同 pixel 位置對版</div>
       <div class="multi-tool-group">
         <button class="multi-tool-btn ${state.multiSyncScroll ? 'active' : ''}" id="multiSyncBtn">${state.multiSyncScroll ? '🔗 同步滾動：開' : '🔓 同步滾動：關'}</button>
         <button class="multi-tool-btn" id="multiTopBtn">↑ 全部回頂</button>
@@ -3148,21 +3183,30 @@ function renderMultiPreview() {
       </div>
     </div>
     <div class="multi-preview-grid" style="--multi-frame-width:${Number(width)}px">`;
-  mails.forEach((mail, index) => {
-    const tier = tiers[index] ? tiers[index].id : `MAIL#${index + 1}`;
-    html += `<article class="multi-preview-card">
-      <header class="multi-preview-card-header"><span class="tier">${escapeHtml(tier)}</span> PAGE ${index + 1}
-        <div class="title" title="${escapeHtml(fileNames[index])}">${escapeHtml(fileNames[index])}</div>
-      </header>
-      <iframe class="multi-preview-frame" data-multi-index="${index}" sandbox="allow-same-origin" title="${escapeHtml(fileNames[index])}"></iframe>
-    </article>`;
+  order.forEach((mailIndex, position) => {
+    const tier = tiers[mailIndex] ? tiers[mailIndex].id : 'MAIL#' + (mailIndex + 1);
+    const leftDisabled = position === 0 ? ' disabled' : '';
+    const rightDisabled = position === order.length - 1 ? ' disabled' : '';
+    html += '<article class="multi-preview-card" data-order-pos="' + position + '">' +
+      '<header class="multi-preview-card-header" draggable="true" data-order-pos="' + position + '" title="拖曳呢個頁頭改變次序">' +
+        '<div class="multi-card-topline"><span class="tier">' + escapeHtml(tier) + '</span> PAGE ' + (position + 1) +
+          '<div class="multi-order-controls">' +
+            '<button type="button" class="multi-order-btn" data-order-pos="' + position + '" data-move="-1" title="向左移"' + leftDisabled + '>←</button>' +
+            '<span class="multi-drag-handle" title="拖曳排序">⠿ 拖曳</span>' +
+            '<button type="button" class="multi-order-btn" data-order-pos="' + position + '" data-move="1" title="向右移"' + rightDisabled + '>→</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="title" title="' + escapeHtml(fileNames[mailIndex]) + '">' + escapeHtml(fileNames[mailIndex]) + '</div>' +
+      '</header>' +
+      '<iframe class="multi-preview-frame" data-multi-index="' + mailIndex + '" sandbox="allow-same-origin" title="' + escapeHtml(fileNames[mailIndex]) + '"></iframe>' +
+    '</article>';
   });
   html += `</div></div>`;
   container.innerHTML = html;
 
   const frames = Array.from(container.querySelectorAll('.multi-preview-frame'));
   const expectedPositions = new WeakMap();
-  frames.forEach((frame, index) => {
+  frames.forEach(frame => {
     frame.addEventListener('load', () => {
       const win = frame.contentWindow;
       if (!win) return;
@@ -3181,7 +3225,54 @@ function renderMultiPreview() {
         if (state.multiSyncScroll) syncMultiScrollFrames(frames, frame, expectedPositions);
       }, { passive: true });
     }, { once: true });
-    frame.srcdoc = mails[index].html;
+    const mailIndex = Number(frame.dataset.multiIndex);
+    frame.srcdoc = mails[mailIndex].html;
+  });
+
+  container.querySelectorAll('[data-move]').forEach(btn => {
+    btn.onclick = event => {
+      event.stopPropagation();
+      const fromPosition = Number(btn.dataset.orderPos);
+      const toPosition = fromPosition + Number(btn.dataset.move);
+      state.multiPreviewOrder = moveMultiPreviewOrder(order, fromPosition, toPosition);
+      renderMultiPreview();
+    };
+  });
+
+  let draggedPosition = null;
+  const clearDragStyles = () => {
+    container.querySelectorAll('.multi-preview-card').forEach(card => card.classList.remove('is-dragging', 'is-drop-target'));
+  };
+  container.querySelectorAll('.multi-preview-card-header').forEach(header => {
+    header.addEventListener('dragstart', event => {
+      draggedPosition = Number(header.dataset.orderPos);
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(draggedPosition));
+      header.closest('.multi-preview-card').classList.add('is-dragging');
+    });
+    header.addEventListener('dragend', () => {
+      draggedPosition = null;
+      clearDragStyles();
+    });
+  });
+  container.querySelectorAll('.multi-preview-card').forEach(card => {
+    card.addEventListener('dragover', event => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      container.querySelectorAll('.multi-preview-card').forEach(item => item.classList.toggle('is-drop-target', item === card));
+    });
+    card.addEventListener('dragleave', event => {
+      if (!card.contains(event.relatedTarget)) card.classList.remove('is-drop-target');
+    });
+    card.addEventListener('drop', event => {
+      event.preventDefault();
+      const fromPosition = draggedPosition == null ? Number(event.dataTransfer.getData('text/plain')) : draggedPosition;
+      const toPosition = Number(card.dataset.orderPos);
+      clearDragStyles();
+      if (!Number.isInteger(fromPosition) || fromPosition === toPosition) return;
+      state.multiPreviewOrder = moveMultiPreviewOrder(order, fromPosition, toPosition);
+      renderMultiPreview();
+    });
   });
 
   container.querySelector('#multiSyncBtn').onclick = e => {
