@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.23</title>
+<title>SUN仔 EDM及 Website 小助手 v3.24</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -263,8 +263,8 @@
   .multi-tool-btn { border: 1px solid #bdcbd0; background: #fff; color: #405159; padding: 6px 10px; min-height: 31px; cursor: pointer; font-size: 11px; border-radius: 2px; }
   .multi-tool-btn:hover { border-color: #004c5b; background: #fff6d9; }
   .multi-tool-btn.active { background: #004c5b; color: #fff; border-color: #004c5b; }
-  .multi-preview-grid { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 12px; overflow-x: auto; overflow-y: hidden; padding: 12px; background: #e9eeef; }
-  .multi-preview-card { flex: 0 0 var(--multi-frame-width); min-width: var(--multi-frame-width); display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 1px solid #bdcbd0; box-shadow: 0 2px 10px rgba(0,57,70,.09); transition: opacity .15s, outline-color .15s; }
+  .multi-preview-grid { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 6px; background: #e9eeef; }
+  .multi-preview-card { flex: 0 0 var(--multi-card-width); min-width: var(--multi-card-width); display: flex; flex-direction: column; overflow: hidden; background: #fff; border: 1px solid #bdcbd0; box-shadow: 0 2px 10px rgba(0,57,70,.09); transition: opacity .15s, outline-color .15s; }
   .multi-preview-card.is-dragging { opacity: .52; }
   .multi-preview-card.is-drop-target { outline: 3px solid #f5b800; outline-offset: -3px; }
   .multi-preview-card-header { flex: 0 0 auto; min-height: 54px; padding: 8px 10px; border-bottom: 3px solid #f5b800; background: #fff; font-size: 11px; color: #61717a; line-height: 1.35; cursor: grab; user-select: none; }
@@ -277,7 +277,8 @@
   .multi-drag-handle { color: #718188; font-size: 12px; white-space: nowrap; }
   .multi-preview-card-header .title { margin-top: 4px; color: #20292d; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .multi-preview-card-header .tier { color: #fff; background: #004c5b; padding: 2px 7px; margin-right: 6px; }
-  .multi-preview-frame { flex: 1; min-height: 0; width: 100%; border: 0; background: #fff; }
+  .multi-preview-frame-clip { flex: 1; min-height: 0; position: relative; overflow: hidden; background: #fff; }
+  .multi-preview-frame { position: absolute; inset-block: 0; left: 50%; width: var(--multi-render-width); height: 100%; transform: translateX(-50%); border: 0; background: #fff; }
 
   /* ==================== RULES PANEL ==================== */
   .rules-content { font-size: 14px; line-height: 1.7; color: #4a5860; }
@@ -461,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.23</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.24</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -2258,6 +2259,7 @@ const state = {
   previewMailIdx: 0,
   previewWidth: 'full',      // 'full' | '768' | '375'
   multiPreviewWidth: '375',  // clean side-by-side viewport width
+  multiCropDesktop: true,    // keep the real viewport, but crop empty sides around desktop EDM content
   multiSyncScroll: true,
   multiScrollTop: 0,
   multiPreviewOrder: [],     // display-only order of original mail indexes
@@ -3287,6 +3289,39 @@ function moveMultiPreviewOrder(order, fromPosition, toPosition) {
   next.splice(toPosition, 0, moved);
   return next;
 }
+function multiPreviewInlinePixelWidth(el) {
+  if (!el) return 0;
+  const attr = String(el.getAttribute('width') || '').trim();
+  const attrWidth = /^\d+(?:\.\d+)?$/.test(attr) ? Number(attr) : 0;
+  const style = String(el.getAttribute('style') || '');
+  const styleMatch = style.match(/(?:^|;)\s*width\s*:\s*(\d+(?:\.\d+)?)px\b/i);
+  return styleMatch ? Number(styleMatch[1]) : attrWidth;
+}
+function detectedEmailCanvasWidth(mail, viewportWidth) {
+  const viewport = Number(viewportWidth) || 375;
+  if (viewport <= 375 || !mail || !mail.html) return viewport;
+  const doc = parseDom(mail.html);
+  let candidates = Array.from(doc.querySelectorAll('.row-content'))
+    .map(multiPreviewInlinePixelWidth)
+    .filter(value => value >= 320 && value <= viewport);
+  if (!candidates.length) {
+    candidates = Array.from(doc.querySelectorAll('table[align="center"][width], table[style*="width"]'))
+      .map(multiPreviewInlinePixelWidth)
+      .filter(value => value >= 320 && value <= viewport);
+  }
+  if (!candidates.length) return Math.min(viewport, 600);
+  const counts = new Map();
+  candidates.forEach(value => counts.set(value, (counts.get(value) || 0) + 1));
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1] || b[0] - a[0])[0][0];
+}
+function multiPreviewDisplayWidth(row, viewportWidth) {
+  const viewport = Number(viewportWidth) || 375;
+  if (!state.multiCropDesktop || viewport <= 375) return viewport;
+  const mailType = row && (row.mailType || (row.parsed && detectMailType(row.parsed.html)));
+  if (mailType !== 'email') return viewport;
+  return detectedEmailCanvasWidth(row.parsed, viewport);
+}
 function renderMultiPreview() {
   const container = document.getElementById('multiPreviewContainer');
   const ctx = state.lastResult;
@@ -3295,22 +3330,25 @@ function renderMultiPreview() {
   const order = normalizedMultiPreviewOrder(mails.length);
   state.multiPreviewOrder = order;
   const width = ['375', '768', '1200'].includes(state.multiPreviewWidth) ? state.multiPreviewWidth : '375';
+  const renderWidth = Number(width);
   let html = `<div class="multi-preview-shell">
     <div class="multi-preview-toolbar">
-      <div><strong>▥ ${mails.length} 頁同步預覽</strong> · 拖住頁頭排序 · 乾淨原稿，唔插 memo · 相同 pixel 位置對版</div>
+      <div><strong>▥ ${mails.length} 頁同步預覽</strong> · 拖住頁頭排序 · PC 保留真實 viewport、只裁走 EDM 左右空白</div>
       <div class="multi-tool-group">
         <button class="multi-tool-btn ${state.multiSyncScroll ? 'active' : ''}" id="multiSyncBtn">${state.multiSyncScroll ? '🔗 同步滾動：開' : '🔓 同步滾動：關'}</button>
         <button class="multi-tool-btn" id="multiTopBtn">↑ 全部回頂</button>
+        <button class="multi-tool-btn ${state.multiCropDesktop ? 'active' : ''}" id="multiCropBtn">${state.multiCropDesktop ? '✂️ PC 空白：已裁' : '↔️ PC 空白：保留'}</button>
         <span style="margin-left:5px;">Viewport</span>
         ${['375','768','1200'].map(v => `<button class="multi-tool-btn ${width === v ? 'active' : ''}" data-multi-width="${v}">${v === '375' ? '📱 375' : v === '768' ? '📱 768' : '💻 1200'}</button>`).join('')}
       </div>
     </div>
-    <div class="multi-preview-grid" style="--multi-frame-width:${Number(width)}px">`;
+    <div class="multi-preview-grid">`;
   order.forEach((mailIndex, position) => {
     const tier = tiers[mailIndex] ? tiers[mailIndex].id : 'MAIL#' + (mailIndex + 1);
+    const cardWidth = multiPreviewDisplayWidth(sorted[mailIndex], renderWidth);
     const leftDisabled = position === 0 ? ' disabled' : '';
     const rightDisabled = position === order.length - 1 ? ' disabled' : '';
-    html += '<article class="multi-preview-card" data-order-pos="' + position + '">' +
+    html += '<article class="multi-preview-card" data-order-pos="' + position + '" style="--multi-card-width:' + cardWidth + 'px;--multi-render-width:' + renderWidth + 'px">' +
       '<header class="multi-preview-card-header" draggable="true" data-order-pos="' + position + '" title="拖曳呢個頁頭改變次序">' +
         '<div class="multi-card-topline"><span class="tier">' + escapeHtml(tier) + '</span> PAGE ' + (position + 1) +
           '<div class="multi-order-controls">' +
@@ -3321,7 +3359,7 @@ function renderMultiPreview() {
         '</div>' +
         '<div class="title" title="' + escapeHtml(fileNames[mailIndex]) + '">' + escapeHtml(fileNames[mailIndex]) + '</div>' +
       '</header>' +
-      '<iframe class="multi-preview-frame" data-multi-index="' + mailIndex + '" sandbox="allow-same-origin" title="' + escapeHtml(fileNames[mailIndex]) + '"></iframe>' +
+      '<div class="multi-preview-frame-clip"><iframe class="multi-preview-frame" data-multi-index="' + mailIndex + '" sandbox="allow-same-origin" title="' + escapeHtml(fileNames[mailIndex]) + '"></iframe></div>' +
     '</article>';
   });
   html += `</div></div>`;
@@ -3411,6 +3449,10 @@ function renderMultiPreview() {
       expectedPositions.set(frame, 0);
       frame.contentWindow.scrollTo(0, 0);
     });
+  };
+  container.querySelector('#multiCropBtn').onclick = () => {
+    state.multiCropDesktop = !state.multiCropDesktop;
+    renderMultiPreview();
   };
   container.querySelectorAll('[data-multi-width]').forEach(btn => {
     btn.onclick = () => {
