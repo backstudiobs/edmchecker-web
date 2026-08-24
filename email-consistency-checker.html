@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.20.2</title>
+<title>SUN仔 EDM及 Website 小助手 v3.21.1</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -434,7 +434,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.20.2</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.21.1</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -499,12 +499,13 @@
       <div class="rules-content">
         <h3>單封MAIL (Single-email)</h3>
         <ul>
-          <li><b>Approved Word（可選）：</b>上載 `.docx` 後，自動讀 TC／EN EDM 文案表；有 TC／EN 表頭會直接使用，無表頭時會按中英文內容自動辨認欄位。另支援 Reward 表內嘅 Tier 1／Tier 2-4／Tier 5-6 獎品格式。無 Word 時不影響任何舊規則。</li>
+          <li><b>Approved Word（可選）：</b>上載 `.docx` 後，自動讀 TC／EN EDM 文案表；有 TC／EN 表頭會直接使用，無表頭時會按中英文內容自動辨認欄位。Word 有 Enrolled／Not Enrolled 區塊時，會按檔名 <code>_E_</code>／<code>_NE_</code> 自動揀相應文案。另支援 Reward 表內嘅 Tier 1／Tier 2-4／Tier 5-6 獎品格式。無 Word 時不影響任何舊規則。</li>
           <li><b>語言連結：</b>右上角「EN/繁體」link 指向嘅 <code>*_T{tier}_*_(EN|TC).html</code>，check 有無對應到你揀嘅 tier；支援單 Tier（T1…T6）同組合 Tier（例如 T1-2／T2-4／T5-6）</li>
           <li><b>多餘空白：</b>中文字之間嘅單一／連續空格（包括 <code>&amp;nbsp;</code>、全形空格）、句末 <code>&amp;nbsp;</code>、連續2+空格</li>
           <li><b>標點：</b>中文段落用咗半形標點（,.!?()）、成對符號未閉合（「」『』（））</li>
           <li><b>稱謂：</b>Chinese段落必須用「<code>您</code>」（避免用「<code>你</code>」）</li>
-          <li><b>術語：</b>Coupon統一用「<code>電子現金券</code>」，唔應該用「電子禮券」；完整禮品正名「<code>法式焦糖燉蛋電子禮券</code>」、「<code>戚風小蛋糕電子禮券</code>」、「<code>原個戚風大蛋糕電子禮券</code>」除外</li>
+          <li><b>術語：</b>Coupon統一用「<code>電子現金券</code>」；完整禮品正名「<code>法式焦糖燉蛋電子禮券</code>」、「<code>戚風小蛋糕電子禮券</code>」、「<code>原個戚風大蛋糕電子禮券</code>」、「<code>agnès b. 蝴蝶酥禮盒（15件）電子禮券</code>」、「<code>agnès b. 迷你法式水果撻（6件）電子禮券</code>」除外。但同一正名前面有 HK$／$價錢時，仍須改用「電子現金券」。</li>
+          <li><b>品牌正名：</b><code>agnès b.</code> 必須保持全小寫；<code>Agnès b.</code> 或其他大小寫變體會提示</li>
           <li><b>金額格式：</b>HK$XX 之後接中文字時要加空格（正確：<code>HK$50 電子現金券</code>，錯：<code>HK$100券</code>）；前面接中文（例 <code>獲享HK$50</code>）係OK</li>
           <li><b>HTML 雜訊：</b>空 <code>&lt;a&gt;</code> tag、<code>&lt;u&gt;</code> 同 <code>text-decoration:underline</code> 混用</li>
         </ul>
@@ -523,7 +524,7 @@
         <h3>字型/CSS 跨MAIL比對（Mobile + Desktop）</h3>
         <ul>
           <li>會用 <b>iframe render</b> 每封MAIL喺 <b>Mobile 375</b> 同 <b>Desktop 1200</b> 兩個viewport下攞真正嘅 <code>getComputedStyle</code>（includes <code>&lt;style&gt;</code> block、<code>@media</code> query、inheritance — 唔止inline style）</li>
-          <li>Check keys: <b>文字對齊（置左/中/右）</b> / <code>font-weight</code>（BOLD） / <code>font-family</code> / <code>font-size</code> / <code>line-height</code> / <code>margin</code> / <code>color</code> / <code>font-style</code> / <code>text-decoration</code></li>
+          <li>Check keys: <b>文字對齊（置左/中/右）</b> / <code>font-weight</code>（按實際可見文字計算；整段 <code>&lt;strong&gt;</code>／<code>&lt;b&gt;</code> 會視為粗體） / <code>font-family</code> / <code>font-size</code> / <code>line-height</code> / <code>margin</code> / <code>color</code> / <code>font-style</code> / <code>text-decoration</code></li>
           <li><b>中英文字型：</b>中文用 <code>"Noto Sans TC", "ヒラギノ角ゴ Pro W3"</code>、英文用 <code>"Sun Life New Text", Arial</code> 視為語言對應嘅正常組合，唔會當成跨語言字型不一致；同語言或其他字型差異仍會提示</li>
           <li><b>文字對齊</b>用 <b>bounding-box 視覺偵測</b>（量度文字實際位置 vs 容器）— 唔理個置中係用 <code>text-align</code>、<code>margin:auto</code> 定 <code>&lt;td align&gt;</code> 做，都captured到。捉到「應該置左但置中」呢類問題</li>
           <li>Majority vote：3+封MAIL之中1封唔一致 → 只 flag outlier；每個issue會標明係 📱 Mobile 定 💻 Desktop 出事</li>
@@ -833,6 +834,38 @@ function classifyRow(cells) {
 
 // Render mail into a hidden iframe at target viewport, then read getComputedStyle for each paragraph.
 // This captures styles from <style> blocks + media queries + inheritance — much more accurate than inline-only.
+function normalizeFontWeightNumber(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'bold' || raw === 'bolder') return 700;
+  if (raw === 'normal') return 400;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : 400;
+}
+
+// getComputedStyle(<p>) only reports the paragraph/container weight. Email builders often
+// leave that at 400 and wrap the whole visible sentence in <strong>/<b>. Compare the
+// computed weight of each visible text node instead, so visually-identical bold text agrees.
+// A genuinely mixed paragraph keeps a deterministic mixed marker and still gets flagged.
+function effectiveTextFontWeight(win, el) {
+  const weights = [];
+  const visit = (node) => {
+    if (!node) return;
+    if (node.nodeType === 3) {
+      if (!String(node.nodeValue || '').replace(/\s+/g, ' ').trim()) return;
+      const owner = node.parentElement || el;
+      const cs = win.getComputedStyle(owner);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return;
+      weights.push(normalizeFontWeightNumber(cs.fontWeight));
+      return;
+    }
+    Array.from(node.childNodes || []).forEach(visit);
+  };
+  visit(el);
+  if (!weights.length) return String(normalizeFontWeightNumber(win.getComputedStyle(el).fontWeight));
+  const unique = Array.from(new Set(weights)).sort((a, b) => a - b);
+  return unique.length === 1 ? String(unique[0]) : `mixed:${unique.join('/')}`;
+}
+
 async function computeParagraphStyles(mail, viewportWidth) {
   return new Promise((resolve) => {
     const iframe = document.createElement('iframe');
@@ -852,7 +885,7 @@ async function computeParagraphStyles(mail, viewportWidth) {
           return {
             'font-family': cs.fontFamily || '',
             'font-size': cs.fontSize || '',
-            'font-weight': cs.fontWeight || '',
+            'font-weight': effectiveTextFontWeight(win, n),
             'line-height': cs.lineHeight || '',
             'text-align': cs.textAlign || '',
             'color': cs.color || '',
@@ -1533,24 +1566,51 @@ const APPROVED_E_VOUCHER_NAMES = [
   '法式焦糖燉蛋電子禮券',
   '戚風小蛋糕電子禮券',
   '原個戚風大蛋糕電子禮券',
+  'agnès b. 蝴蝶酥禮盒（15件）電子禮券',
+  'agnès b. 迷你法式水果撻（6件）電子禮券',
 ];
+function isApprovedElectronicVoucherOccurrence(text, endIndex) {
+  return APPROVED_E_VOUCHER_NAMES.some(properName => {
+    const startIndex = endIndex - properName.length;
+    if (startIndex < 0 || text.slice(startIndex, endIndex) !== properName) return false;
+    const nearbyPrefix = text.slice(Math.max(0, startIndex - 80), startIndex);
+    const hasPriceBefore = /(?:HK)?\$\s*[\d,]+(?:\.\d+)?[^。！？\n]{0,80}$/i.test(nearbyPrefix);
+    return !hasPriceBefore;
+  });
+}
 function checkCouponTerm(mail) {
   const issues = [];
   const doc = parseDom(mail.html);
   extractParagraphs(doc).forEach((p, i) => {
     const t = p.text;
-    const termScan = APPROVED_E_VOUCHER_NAMES.reduce(
-      (value, properName) => value.split(properName).join(''),
-      t
+    const invalidMatches = [...t.matchAll(/電子禮券/g)].filter(match =>
+      !isApprovedElectronicVoucherOccurrence(t, match.index + match[0].length)
     );
-    const matches = termScan.match(/電子禮券/g);
-    if (matches && matches.length > 0) {
+    if (invalidMatches.length > 0) {
       issues.push({
         severity: 'warn', category: '術語',
-        message: `用咗「<code>電子禮券</code>」，應該統一用「<code>電子現金券</code>」— 出現 ${matches.length} 次`,
+        message: `用咗「<code>電子禮券</code>」，應該統一用「<code>電子現金券</code>」— 出現 ${invalidMatches.length} 次`,
         snippet: t, paraIndex: i,
       });
     }
+  });
+  return issues;
+}
+
+// Rule: the official brand styling is exactly "agnès b." (all lowercase).
+function checkBrandSpelling(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  extractParagraphs(doc).forEach((p, i) => {
+    const wrongForms = [...p.text.matchAll(/agnès b\./giu)]
+      .map(match => match[0])
+      .filter(value => value !== 'agnès b.');
+    if (!wrongForms.length) return;
+    issues.push({
+      severity: 'warn', category: '品牌正名',
+      message: `品牌名稱必須寫成「<code>agnès b.</code>」；發現：${[...new Set(wrongForms)].map(value => `<code>${escapeHtml(value)}</code>`).join('、')}`,
+      snippet: p.text, paraIndex: i,
+    });
   });
   return issues;
 }
@@ -1778,6 +1838,30 @@ function detectBilingualWordTable(matrices) {
   });
   return best;
 }
+function detectEnrollmentWordVariants(bilingual) {
+  const variants = { E: { TC: [], EN: [] }, NE: { TC: [], EN: [] } };
+  let audience = '';
+  bilingual.matrix.forEach(row => {
+    const labels = row.map(cell => wordCellText(cell).trim());
+    const label = labels.find(text => /^(?:enrolled|not\s+enrolled|已登記|未登記|已註冊|未註冊|已參加|未參加)$/i.test(text));
+    if (label) {
+      audience = /^(?:not\s+enrolled|未登記|未註冊|未參加)$/i.test(label) ? 'NE' : 'E';
+      return;
+    }
+    if (!audience) return;
+    (row[bilingual.tcCol] || []).forEach(text => { const value = text.trim(); if (value) variants[audience].TC.push(value); });
+    (row[bilingual.enCol] || []).forEach(text => { const value = text.trim(); if (value) variants[audience].EN.push(value); });
+  });
+  const hasE = variants.E.TC.length || variants.E.EN.length;
+  const hasNE = variants.NE.TC.length || variants.NE.EN.length;
+  return hasE && hasNE ? variants : null;
+}
+function enrollmentAudienceFromFileName(fileName) {
+  const baseName = String(fileName || '').split(/[\\/]/).pop().replace(/\.[^.]+$/, '');
+  if (/(?:^|[_-])ne(?=$|[_-])/i.test(baseName)) return 'NE';
+  if (/(?:^|[_-])e(?=$|[_-])/i.test(baseName)) return 'E';
+  return '';
+}
 async function readDocxZipEntry(file, wantedName) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -1867,7 +1951,8 @@ async function parseApprovedWord(file) {
   const inserted = xml.getElementsByTagNameNS('*', 'ins').length;
   const deleted = xml.getElementsByTagNameNS('*', 'del').length;
   const highlights = xml.getElementsByTagNameNS('*', 'highlight').length;
-  return { name: file.name, tc, en, subjects, tierPrizes: detectTierPrizeTable(matrices), meta: { inserted, deleted, highlights, inferredColumns: bilingual.inferred } };
+  const enrollmentVariants = detectEnrollmentWordVariants(bilingual);
+  return { name: file.name, tc, en, subjects, tierPrizes: detectTierPrizeTable(matrices), enrollmentVariants, meta: { inserted, deleted, highlights, inferredColumns: bilingual.inferred } };
 }
 function isDynamicMasterSegment(text) {
   return /(?:XXX|Dear\s+Sir\/?Madam|\{\{|WhatsApp|@[a-z0-9.-]+\.[a-z]{2,}|Chen\s+Manqi|\b(?:\+?852\s*)?\d{4}\s*\d{4}\b)/i.test(text)
@@ -1926,10 +2011,17 @@ function findTierPrize(tierPrizes, tierId, lang) {
   }
   return null;
 }
+function approvedWordSourceForMail(master, lang, fileName) {
+  const audience = enrollmentAudienceFromFileName(fileName);
+  const audienceSource = audience && master.enrollmentVariants && master.enrollmentVariants[audience]
+    ? master.enrollmentVariants[audience][lang]
+    : null;
+  return audienceSource && audienceSource.length ? audienceSource : (lang === 'TC' ? master.tc : master.en);
+}
 function checkApprovedWordCopy(mail, tierId, master) {
   if (!master) return [];
   const lang = detectCopyLanguage(mail);
-  let source = lang === 'TC' ? master.tc : master.en;
+  let source = approvedWordSourceForMail(master, lang, mail.fileName || '');
   const hasRealSubject = !!mail.subject && mail.subject !== mail.fileName && !/^\[(?:Folder|URL)\]/.test(mail.subject);
   if (!hasRealSubject && master.subjects && master.subjects[lang]) {
     const subjectKey = compactCopy(master.subjects[lang]);
@@ -2042,7 +2134,9 @@ function renderWordMasterStatus() {
   wordStatus.innerHTML = `<span class="master-ok">✓ Approved Word 已載入</span> · <b>${escapeHtml(master.name)}</b><br>` +
     `EDM master：TC ${master.tc.length} 段／EN ${master.en.length} 段 · ` +
     (tiers.length ? `Tier獎品：${tiers.map(escapeHtml).join('、')}` : '未偵測到 Tier 獎品表（只做文案比較）') +
-    ` · 文案欄：${master.meta.inferredColumns ? '按內容自動辨認' : 'TC／EN 表頭'} · 修訂：+${master.meta.inserted}/−${master.meta.deleted}`;
+    ` · 文案欄：${master.meta.inferredColumns ? '按內容自動辨認' : 'TC／EN 表頭'}` +
+    (master.enrollmentVariants ? ' · E／NE 分流：✓' : '') +
+    ` · 修訂：+${master.meta.inserted}/−${master.meta.deleted}`;
   wordRemoveBtn.hidden = false;
 }
 wordBtn.onclick = () => { wordInput.value = ''; wordInput.click(); };
@@ -2373,6 +2467,7 @@ async function runChecks() {
         ...checkPunctuation(row.parsed),
         ...checkHonorific(row.parsed),
         ...checkCouponTerm(row.parsed),
+        ...checkBrandSpelling(row.parsed),
         ...checkMoneyFormat(row.parsed),
         ...checkIntraMailIconConsistency(row.parsed),
         ...checkHtmlNoise(row.parsed),
