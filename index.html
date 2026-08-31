@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.25.2</title>
+<title>SUN仔 EDM及 Website 小助手 v3.25.3</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.25.2</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.25.3</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -1227,6 +1227,43 @@ const STYLE_KEY_LABEL = {
 };
 const VALUE_LABEL = { left: '置左', center: '置中', right: '置右', '': '(未偵測)' };
 function styleValLabel(k, v) { return k === 'align' ? (VALUE_LABEL[v] || v) : v; }
+
+function parseCssBoxValue(raw) {
+  const parts = String(raw || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length !== 4) return null;
+  const nums = parts.map(value => {
+    const match = value.match(/^(-?(?:\d+\.?\d*|\.\d+))px$/i);
+    return match ? Number(match[1]) : NaN;
+  });
+  return nums.every(Number.isFinite) ? { top: nums[0], right: nums[1], bottom: nums[2], left: nums[3] } : null;
+}
+
+function humanMarginComparison(thisRaw, referenceRaw, thisMailLabel, otherCount) {
+  const current = parseCssBoxValue(thisRaw);
+  const reference = parseCssBoxValue(referenceRaw);
+  if (!current || !reference) return null;
+  const changed = ['top', 'right', 'bottom', 'left'].filter(side => current[side] !== reference[side]);
+  if (!changed.length) return null;
+  const sideName = { top: '上方', right: '右邊', bottom: '下方', left: '左邊' };
+  const effects = changed.map(side => {
+    const diff = current[side] - reference[side];
+    const px = Math.abs(diff);
+    if (side === 'bottom') return diff < 0
+      ? `下方少咗 <b>${px}px</b> 空位，所以下一段內容會向上貼近約 <b>${px}px</b>`
+      : `下方多咗 <b>${px}px</b> 空位，所以下一段內容會向下推約 <b>${px}px</b>`;
+    if (side === 'top') return diff < 0
+      ? `上方少咗 <b>${px}px</b> 空位，呢段會向上移約 <b>${px}px</b>`
+      : `上方多咗 <b>${px}px</b> 空位，呢段會向下移約 <b>${px}px</b>`;
+    if (side === 'left') return diff < 0
+      ? `左邊少咗 <b>${px}px</b> 空位，呢段會向左移約 <b>${px}px</b>`
+      : `左邊多咗 <b>${px}px</b> 空位，呢段會向右縮入約 <b>${px}px</b>`;
+    return diff < 0
+      ? `右邊少咗 <b>${px}px</b> 空位，可用文字闊度會增加約 <b>${px}px</b>`
+      : `右邊多咗 <b>${px}px</b> 空位，可用文字闊度會減少約 <b>${px}px</b>`;
+  });
+  const detail = changed.map(side => `${sideName[side]}：呢封 ${current[side]}px；其他 ${otherCount} 封 ${reference[side]}px`).join('　');
+  return `<b>${escapeHtml(thisMailLabel)}</b> 呢段${effects.join('；')}。<div class="ecm-snippet">${detail}</div>`;
+}
 
 // Build interleaved block sequence (text paragraphs + images in document order)
 function extractBlockSequence(doc) {
@@ -3114,14 +3151,16 @@ async function runChecks() {
         // Skip style diffs for gift rows (different tier = different products with different inline styles, expected)
         if (row.kind !== 'gift') {
           // Combine style diffs from mobile + desktop into one memo per (viewport, key)
-          const buildStyleMemo = (d, viewportLabel, cellStyleKey) => {
+          const buildStyleMemo = (d, viewportLabel, thisRaw) => {
             if (!d.outlierMails.includes(mi)) return null;
-            const label = STYLE_KEY_LABEL[d.key] || d.key;
-            const thisRaw = (row.cells[mi][cellStyleKey] || {})[d.key] || '';
+            const label = d.key === 'margin' ? '段落空位' : (STYLE_KEY_LABEL[d.key] || d.key);
             const fmt = (v) => escapeHtml(styleValLabel(d.key, v) || '(未設定)');
             let body;
             if (d.hasClearMajority) {
-              body = `呢段嘅 <b>${label}</b> 喺 <b>${viewportLabel}</b> 同其他 <b>${d.majority.mails.length}</b> 封MAIL唔一致：<div class="ecm-file-list">
+              const marginExplanation = d.key === 'margin'
+                ? humanMarginComparison(thisRaw, d.majority.raw, tierLabel(mi), d.majority.mails.length)
+                : null;
+              body = marginExplanation || `呢段嘅 <b>${label}</b> 喺 <b>${viewportLabel}</b> 同其他 <b>${d.majority.mails.length}</b> 封MAIL唔一致：<div class="ecm-file-list">
                 <div class="ecm-file-card" style="background: rgba(76,175,80,.08) !important; border-left: 3px solid #43a047 !important;">
                   <span class="ecm-file-label" style="color: #2e7d32 !important;">✓ 其他 ${d.majority.mails.length} 封MAIL</span>
                   <span class="ecm-file-value">${fmt(d.majority.raw)}</span>
@@ -3140,12 +3179,28 @@ async function runChecks() {
             }
             return { severity: 'warn', title: `${viewportLabel} · ${label}`, body };
           };
+          // Merge Mobile + Desktop when the same mail has exactly the same CSS difference.
+          // The user needs one visual conclusion, not duplicate engineering reports.
+          const styleCandidates = [];
           (row.styleDiffsMobile || []).forEach(d => {
-            const memo = buildStyleMemo(d, '📱 Mobile 375', 'styleMobile');
-            if (memo) items.push(memo);
+            if (!d.outlierMails.includes(mi)) return;
+            styleCandidates.push({ d, viewport: '📱 Mobile 375', thisRaw: (row.cells[mi].styleMobile || {})[d.key] || '' });
           });
           (row.styleDiffsDesktop || []).forEach(d => {
-            const memo = buildStyleMemo(d, '💻 Desktop 1200', 'styleDesktop');
+            if (!d.outlierMails.includes(mi)) return;
+            styleCandidates.push({ d, viewport: '💻 Desktop 1200', thisRaw: (row.cells[mi].styleDesktop || {})[d.key] || '' });
+          });
+          const mergedStyleCandidates = new Map();
+          styleCandidates.forEach(candidate => {
+            const d = candidate.d;
+            const groups = d.groups.map(group => `${normalizeCssValue(group.raw)}:${group.mails.join(',')}`).sort().join('|');
+            const signature = `${d.key}::${normalizeCssValue(candidate.thisRaw)}::${groups}`;
+            if (!mergedStyleCandidates.has(signature)) mergedStyleCandidates.set(signature, { ...candidate, viewports: [] });
+            mergedStyleCandidates.get(signature).viewports.push(candidate.viewport);
+          });
+          mergedStyleCandidates.forEach(candidate => {
+            const viewportLabel = candidate.viewports.join(' ＋ ');
+            const memo = buildStyleMemo(candidate.d, viewportLabel, candidate.thisRaw);
             if (memo) items.push(memo);
           });
         }
