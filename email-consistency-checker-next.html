@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.25.3</title>
+<title>SUN仔 EDM及 Website 小助手 v4.0.0-beta.4（Mirror）</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,14 +462,13 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.25.3</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.0.0-beta.4</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
     <div class="header-meta" aria-label="工具特色">
       <span>🔒 100% 本機處理</span>
       <span>Mobile + Desktop QA</span>
-      <a href="email-consistency-checker-next.html" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#ff9800;color:#fff;border-radius:6px;text-decoration:none;font-weight:650;font-size:12px;">🧪 試用 Beta v4</a>
     </div>
   </div>
   <div class="sub">Drop 多封 .eml，一鍵check：語言連結、字型、標點、跨MAIL文字一致性；可切換 side-by-side、全圖貼memo或多頁同步預覽</div>
@@ -930,6 +929,9 @@ async function computeParagraphStyles(mail, viewportWidth) {
         const paraNodes = Array.from(doc.querySelectorAll(PARA_SELECTOR)).filter(n => (n.textContent || '').replace(/\s+/g, ' ').trim());
         const paras = paraNodes.map(n => {
           const cs = win.getComputedStyle(n);
+          // v4 beta: 加 rect 用嚟做跨MAIL 文字位置對比
+          const rng = doc.createRange(); rng.selectNodeContents(n);
+          const tr = rng.getBoundingClientRect();
           return {
             'font-family': cs.fontFamily || '',
             'font-size': cs.fontSize || '',
@@ -941,6 +943,9 @@ async function computeParagraphStyles(mail, viewportWidth) {
             'text-decoration': cs.textDecorationLine || cs.textDecoration || '',
             'margin': `${cs.marginTop} ${cs.marginRight} ${cs.marginBottom} ${cs.marginLeft}`.trim(),
             'align': classifyVisualAlign(win, doc, n),
+            'rectLeft': Math.round(tr.left),
+            'rectTop': Math.round(tr.top),
+            'rectWidth': Math.round(tr.width),
           };
         });
         // Image layout — alignment, size ratio, and the NEXT content block's left edge & alignment.
@@ -1184,8 +1189,8 @@ function crossImageIssues(mails, tierLabelOf) {
     // Take the FIRST img with this srcBase per mail (in case duplicates)
     const perMailImg = lists.map(l => l.find(im => im.srcBase === srcBase));
     const presentMails = perMailImg.map((im, i) => im ? i : null).filter(i => i !== null);
-    // Only compare attributes if img is in majority (>50%) of mails
-    if (presentMails.length <= mails.length / 2) continue;
+    // v4 beta: 只需 2 封或以上出現就比對；唔再靜靜跳過
+    if (presentMails.length < 2) continue;
 
     ['width', 'height'].forEach(attr => {
       const styleAttr = 'style' + attr[0].toUpperCase() + attr.slice(1);
@@ -1198,15 +1203,16 @@ function crossImageIssues(mails, tierLabelOf) {
       const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
       if (sorted.length > 1) {
         const [majVal, majMails] = sorted[0];
-        if (majMails.length > presentMails.length / 2) {
-          for (const [val, mailIds] of sorted.slice(1)) {
-            mailIds.forEach(mi => {
-              perMail[mi].push({
-                severity: 'warn', category: '圖片尺寸', imgId: srcBase,
-                message: `圖片 <code>${escapeHtml(srcBase)}</code> 嘅 <code>${attr}</code> 同 majority 唔同：其他 ${majMails.length} 封用 <code>${majVal || '(未設)'}</code>，呢封用 <code>${val || '(未設)'}</code>`,
-              });
+        // v4 beta: 無 majority 一樣提示人手核對
+        const noMajority = majMails.length <= presentMails.length / 2;
+        for (const [val, mailIds] of sorted.slice(1)) {
+          mailIds.forEach(mi => {
+            const prefix = noMajority ? '⚠️ 無 majority — 人手核對：' : '';
+            perMail[mi].push({
+              severity: 'warn', category: '圖片尺寸', imgId: srcBase,
+              message: `${prefix}圖片 <code>${escapeHtml(srcBase)}</code> 嘅 <code>${attr}</code> 唔一致：其他 ${majMails.length} 封用 <code>${majVal || '(未設)'}</code>，呢封用 <code>${val || '(未設)'}</code>`,
             });
-          }
+          });
         }
       }
     });
@@ -1540,12 +1546,14 @@ function crossImageAlignIssues(mails, tierLabelOf) {
       const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
       if (sorted.length <= 1) continue;
       const [majAlign, majMails] = sorted[0];
-      if (majMails.length <= presentMails.length / 2) continue;
+      // v4 beta: 無 majority 都 flag（例如 2 封 email 對齊唔同 → 依舊要提示人手核對）
+      const noAlignMajority = majMails.length <= presentMails.length / 2;
       for (const [al, mailIds] of sorted.slice(1)) {
         mailIds.forEach(mi => {
+          const prefix = noAlignMajority ? '⚠️ 無 majority — 人手核對：' : '';
           perMail[mi].push({
             severity: 'warn', category: '圖片對齊', imgId: id,
-            message: `圖片 <code>${escapeHtml(id)}</code> 對齊喺 <b>${vp.label}</b> 同其他唔一致：其他 <b>${majMails.length}</b> 封 <b>${VALUE_LABEL[majAlign] || majAlign}</b>，呢封 <b>${VALUE_LABEL[al] || al}</b>`,
+            message: `${prefix}圖片 <code>${escapeHtml(id)}</code> 對齊喺 <b>${vp.label}</b> 同其他唔一致：其他 <b>${majMails.length}</b> 封 <b>${VALUE_LABEL[majAlign] || majAlign}</b>，呢封 <b>${VALUE_LABEL[al] || al}</b>`,
           });
         });
       }
@@ -1571,18 +1579,19 @@ function crossImagePositionIssues(mails, tierLabelOf) {
       return t ? (t.prevHeading || t.prevText || '(開頭)') : null;
     });
     const presentMails = prevPerMail.map((p, i) => p !== null ? i : null).filter(i => i !== null);
-    if (presentMails.length <= mails.length / 2) continue;  // need majority to compare position
+    if (presentMails.length < 2) continue;  // v4 beta: 只需 2 封或以上出現就比對
     const grp = {};
     presentMails.forEach(mi => { const k = prevPerMail[mi] || '(開頭)'; (grp[k] = grp[k] || []).push(mi); });
     const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
     if (sorted.length <= 1) continue;  // all same position
     const [majPrev, majMails] = sorted[0];
-    if (majMails.length <= presentMails.length / 2) continue;  // no clear majority
+    const noPositionMajority = majMails.length <= presentMails.length / 2;  // v4 beta: 無 majority 都 flag
     for (const [prev, mailIds] of sorted.slice(1)) {
       mailIds.forEach(mi => {
+        const prefix = noPositionMajority ? '⚠️ 無 majority — 全部要人手核對：' : '';
         perMail[mi].push({
           severity: 'warn', category: '跨MAIL 圖片次序', imgId: id,
-          message: `圖片 <code>${escapeHtml(id)}</code> 所屬內容可能唔同：其他 <b>${majMails.length}</b> 封放喺標題「${escapeHtml(String(majPrev).slice(0, 28))}」之下，但呢封放喺「${escapeHtml(String(prev).slice(0, 28))}」之下 — 請核對圖片次序`,
+          message: `${prefix}圖片 <code>${escapeHtml(id)}</code> 所屬內容可能唔同：其他 <b>${majMails.length}</b> 封放喺標題「${escapeHtml(String(majPrev).slice(0, 28))}」之下，但呢封放喺「${escapeHtml(String(prev).slice(0, 28))}」之下 — 請核對圖片次序`,
         });
       });
     }
@@ -1612,7 +1621,8 @@ function crossListPositionIssues(mails, tierLabelOf) {
       }).filter(Boolean);
       if (entries.length < 2) return;
       const positions = entries.map(entry => entry.left);
-      if (Math.max(...positions) - Math.min(...positions) <= 8) return;
+      // v4 beta: tighten threshold from 8px → 3px so細微 bullet 偏移都捉到
+      if (Math.max(...positions) - Math.min(...positions) <= 3) return;
 
       const groups = {};
       entries.forEach(entry => {
@@ -1622,6 +1632,7 @@ function crossListPositionIssues(mails, tierLabelOf) {
       });
       const grouped = Object.values(groups).sort((a, b) => b.entries.length - a.entries.length);
       const majority = grouped[0].entries.length > entries.length / 2 ? grouped[0] : null;
+      // v4 beta: 無 majority 時全部都 flag（唔再靜靜跳過）
       const flagged = majority ? entries.filter(entry => entry.left !== majority.left) : entries;
       flagged.forEach(entry => {
         const comparisonLeft = majority
@@ -1654,6 +1665,161 @@ function crossListPositionIssues(mails, tierLabelOf) {
   });
   return perMail;
 }
+
+// ============================================================
+// v4 beta: 四大維度加強
+//   1) crossTextPositionIssues  — rect.left 跨MAIL >2px flag
+//   2) crossPunctuationIssues   — 逐段標點 stream 跨MAIL 對照
+//   3) crossImageHashIssues     — <img> 實際 bytes SHA-256 對照
+//   4) unmatchedSegmentIssues   — 未對齊段落無 tier variable → 紅色
+// ============================================================
+
+// 1. 文字位置一致：同一 aligned row，每 viewport rect.left 差 >2px 就 flag
+function crossTextPositionIssues(rows, mails, tierLabelOf) {
+  const perMail = mails.map(() => []);
+  const viewports = [
+    { key: 'styleMobile', label: '📱 Mobile 375' },
+    { key: 'styleDesktop', label: '💻 Desktop 1200' },
+  ];
+  rows.forEach(row => {
+    if (row.kind === 'tieronly' || row.kind === 'gift') return;
+    viewports.forEach(vp => {
+      const positions = row.cells.map((c, mi) => c && c[vp.key] && typeof c[vp.key].rectLeft === 'number'
+        ? { mi, left: c[vp.key].rectLeft, text: c.text }
+        : null).filter(Boolean);
+      if (positions.length < 2) return;
+      const lefts = positions.map(p => p.left);
+      const range = Math.max(...lefts) - Math.min(...lefts);
+      if (range <= 2) return;  // v4 beta: 2px 容差
+      // group by left
+      const grp = {};
+      positions.forEach(p => { (grp[p.left] = grp[p.left] || []).push(p); });
+      const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
+      const [majLeft, majList] = sorted[0];
+      const noMajority = majList.length <= positions.length / 2;
+      for (const [left, list] of sorted.slice(1)) {
+        list.forEach(p => {
+          const diff = p.left - Number(majLeft);
+          const dir = diff > 0 ? '向右' : '向左';
+          const prefix = noMajority ? '⚠️ 無 majority — 人手核對：' : '';
+          perMail[p.mi].push({
+            severity: 'warn', category: '文字位置',
+            message: `${prefix}<b>${vp.label}</b>：「${escapeHtml(String(p.text || '').slice(0, 40))}」比其他 <b>${majList.length}</b> 封 ${dir}偏約 <b>${Math.abs(diff)}px</b>`,
+          });
+        });
+      }
+    });
+  });
+  return perMail;
+}
+
+// 2. 標點一致：同一 aligned row，抽 punctuation stream 對比
+const _PUNCT_RE = /[，。！？：；、,.!?:;()（）「」『』""''…—–\-\/&·・‧•]/g;
+function extractPunctuation(text) {
+  return String(text || '').match(_PUNCT_RE) || [];
+}
+function crossPunctuationIssues(rows, mails, tierLabelOf) {
+  const perMail = mails.map(() => []);
+  rows.forEach(row => {
+    if (row.kind === 'tieronly' || row.kind === 'gift') return;
+    const streams = row.cells.map((c, mi) => c ? { mi, text: c.text, punct: extractPunctuation(c.text).join(' ') } : null).filter(Boolean);
+    if (streams.length < 2) return;
+    const grp = {};
+    streams.forEach(s => { (grp[s.punct] = grp[s.punct] || []).push(s); });
+    if (Object.keys(grp).length === 1) return;  // 全部標點一樣
+    const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
+    const [majPunct, majList] = sorted[0];
+    const noMajority = majList.length <= streams.length / 2;
+    for (const [punct, list] of sorted.slice(1)) {
+      list.forEach(s => {
+        const prefix = noMajority ? '⚠️ 無 majority — 人手核對：' : '';
+        perMail[s.mi].push({
+          severity: 'warn', category: '標點一致',
+          message: `${prefix}「${escapeHtml(String(s.text || '').slice(0, 40))}」標點同其他唔一致：其他 <b>${majList.length}</b> 封用 <code>${escapeHtml(majPunct || '(無)')}</code>，呢封用 <code>${escapeHtml(punct || '(無)')}</code>`,
+        });
+      });
+    }
+  });
+  return perMail;
+}
+
+// 3. 圖片一致：fetch 每張 img，計 SHA-256；同一 img id 跨MAIL 對照，唔同就 flag
+async function _sha256Hex(buf) {
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+async function _hashImgSrc(src) {
+  if (!src || src.startsWith('data:')) return null;  // data URLs 唔穩，跳過
+  try {
+    const r = await fetch(src, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const buf = await r.arrayBuffer();
+    return await _sha256Hex(buf);
+  } catch (_) { return null; }
+}
+async function crossImageHashIssues(mails, tierLabelOf) {
+  const perMail = mails.map(() => []);
+  if (mails.length < 2) return perMail;
+  // 為每 mail 每 img id 抽 src（優先 desktop layout）
+  const perMailImgs = mails.map(m => {
+    const imgs = (m.layoutDesktop && m.layoutDesktop.images) || (m.layoutMobile && m.layoutMobile.images) || [];
+    return imgs.filter(im => im.id && im.id !== '(inline)' && im.src && !im.src.startsWith('data:'));
+  });
+  const idToPerMailSrc = {};  // id → { mi: src }
+  perMailImgs.forEach((imgs, mi) => {
+    imgs.forEach(im => {
+      if (!idToPerMailSrc[im.id]) idToPerMailSrc[im.id] = {};
+      if (idToPerMailSrc[im.id][mi] === undefined) idToPerMailSrc[im.id][mi] = im.src;
+    });
+  });
+  for (const id of Object.keys(idToPerMailSrc)) {
+    const map = idToPerMailSrc[id];
+    const entries = Object.entries(map);
+    if (entries.length < 2) continue;
+    const hashes = await Promise.all(entries.map(async ([mi, src]) => [mi, await _hashImgSrc(src)]));
+    const valid = hashes.filter(([, h]) => h);
+    if (valid.length < 2) continue;
+    const grp = {};
+    valid.forEach(([mi, h]) => { (grp[h] = grp[h] || []).push(+mi); });
+    if (Object.keys(grp).length === 1) continue;  // 全部 bytes 一樣
+    const sorted = Object.entries(grp).sort((a, b) => b[1].length - a[1].length);
+    const [majHash, majMails] = sorted[0];
+    const noMajority = majMails.length <= valid.length / 2;
+    for (const [h, mailIds] of sorted.slice(1)) {
+      mailIds.forEach(mi => {
+        const prefix = noMajority ? '⚠️ 無 majority — 人手核對：' : '';
+        perMail[mi].push({
+          severity: 'warn', category: '圖片 bytes 一致',
+          message: `${prefix}圖片 <code>${escapeHtml(id)}</code> 實際檔案內容（SHA-256前 16 位）同其他唔同：其他 <b>${majMails.length}</b> 封 <code>${majHash}</code>，呢封 <code>${h}</code> — 可能係換咗圖／壓縮唔一致`,
+        });
+      });
+    }
+  }
+  return perMail;
+}
+
+// 4. 未對齊段落 red flag：tieronly 但段落文字唔含 tier variable → 極可能係真差異被 fuzzy 對唔到
+function unmatchedSegmentIssues(rows, mails, tierLabelOf) {
+  const perMail = mails.map(() => []);
+  rows.forEach(row => {
+    if (row.kind !== 'tieronly') return;
+    row.cells.forEach((c, mi) => {
+      if (!c) return;
+      const raw = String(c.text || '').replace(/\s+/g, ' ').trim();
+      if (!raw) return;
+      const masked = maskTierVariables(raw);
+      const hasTierVar = masked !== raw;  // 遮走後有變 → 段落原有 tier variable
+      if (hasTierVar) return;  // 有 tier variable 屬正常 tier-only
+      // 無 tier variable 但只出現喺呢封 → 大機會係真差異
+      perMail[mi].push({
+        severity: 'warn', category: '未對齊段落',
+        message: `⚠️ 呢段內容只出現喺 <b>${escapeHtml(tierLabelOf(mi))}</b>，其他 MAIL 完全冇；亦冇 tier 變數 → 大機會係漏咗一段文字：<div class="ecm-snippet">${escapeHtml(raw.slice(0, 160))}${raw.length > 160 ? '…' : ''}</div>`,
+      });
+    });
+  });
+  return perMail;
+}
+// ============================================================
 
 function rowStyleDiffs(row, styleKey = 'style') {
   const present = row.cells.map((p, i) => p ? { p, i } : null).filter(Boolean);
@@ -2287,13 +2453,35 @@ async function readZipPackageFiles(file) {
 }
 function detectTierPrizeTable(matrices) {
   const prizes = {};
+  // v4 beta: 抽走行首「Mission reward:」／「任務獎勵：」等 label，唔會混入正文
+  const stripLabel = (text) => String(text || '')
+    .replace(/^\s*(?:Mission\s*reward(?:\s*\(Pick\s*\d+\s*out\s*of\s*\d+\))?|任務獎勵(?:（\s*\d+\s*選\s*\d+\s*）)?)\s*[:：]\s*/i, '')
+    .trim();
+  // v4 beta: 每 cell 可以係多行 alternatives；拆行、剥 label、去 remark。
+  const parseAlternatives = (cellText) => {
+    const raw = String(cellText || '').split(/\n+/).map(stripLabel).map(cleanMasterSegment).filter(Boolean);
+    return raw.filter(line => line.length >= 3);
+  };
   const addPrizeRow = (row, tierCol, tcCol, enCol) => {
-    const tier = normalizeTierId(wordCellText(row[tierCol]));
+    const tierCellRaw = wordCellText(row[tierCol]);
+    // v4 beta: 只認短嘅 tier label；長段 body copy 唔算 tier row
+    if (tierCellRaw.length > 80) return;
+    if (!/^\s*(?:Tier|T)\s*\d/i.test(tierCellRaw)) return;
+    const tier = normalizeTierId(tierCellRaw);
     if (!tier) return;
+    // v4 beta: 早前 matrix 已 detect 過完整 alternatives 就唔覆蓋
+    if (prizes[tier] && (prizes[tier].TC_alternatives || []).length > 0) return;
     const tc = tcCol >= 0 ? wordCellText(row[tcCol]) : '';
     const en = enCol >= 0 ? wordCellText(row[enCol]) : '';
     if (!tc && !en) return;
-    prizes[tier] = { TC: tc, EN: en };
+    const tcAlts = parseAlternatives(tc);
+    const enAlts = parseAlternatives(en);
+    prizes[tier] = {
+      TC: tcAlts[0] || stripLabel(tc),
+      EN: enAlts[0] || stripLabel(en),
+      TC_alternatives: tcAlts,
+      EN_alternatives: enAlts,
+    };
   };
   matrices.forEach(matrix => {
     if (!matrix.length) return;
@@ -2304,8 +2492,30 @@ function detectTierPrizeTable(matrices) {
       const tierCol = headers.findIndex(x => /tier|會籍|級別/i.test(x));
       const tcCol = headers.findIndex(x => /^(?:tc|中文)|tc.*獎品|獎品.*tc/i.test(x));
       const enCol = headers.findIndex(x => /^(?:en|english)|en.*(?:prize|reward)|(?:prize|reward).*en/i.test(x));
-      if (tierCol < 0 || (tcCol < 0 && enCol < 0)) return;
-      matrix.slice(headerIndex + 1).forEach(row => addPrizeRow(row, tierCol, tcCol, enCol));
+      // v4 beta: 支援 "Mission reward" merged-header 格式（header row 可能少過 data row 數目）：
+      // Tier | Value | TC list | EN list（header 「Mission reward」cell 可能 span TC+EN）
+      // 用下一行 data row 決定：cjk evidence 最高嘅欄 = TC，latin evidence 最高（且唔係 TC）嘅欄 = EN
+      let tc = tcCol, en = enCol;
+      const missionHeader = headers.some(x => /mission\s*reward|任務獎勵/i.test(x));
+      if (tierCol >= 0 && (tc < 0 || en < 0) && missionHeader) {
+        const dataRow = matrix[headerIndex + 1] || [];
+        const candidates = [];
+        for (let c = tierCol + 1; c < dataRow.length; c++) {
+          const cellText = wordCellText(dataRow[c]);
+          const ev = wordLanguageEvidence(cellText);
+          if (ev.cjk === 0 && ev.latinWords === 0) continue;
+          // 剔走純價錢 cell（例如 "HK$10"）
+          if (/^\s*(?:HK)?\$?\s*[\d,.]+\s*$/.test(cellText)) continue;
+          candidates.push({ col: c, cjk: ev.cjk, latin: ev.latinWords });
+        }
+        const tcCand = candidates.filter(x => x.cjk > 0).sort((a, b) => b.cjk - a.cjk)[0];
+        const enCand = candidates.filter(x => x.latin > 0 && (!tcCand || x.col !== tcCand.col))
+          .sort((a, b) => b.latin - a.latin)[0];
+        if (tcCand) tc = tcCand.col;
+        if (enCand) en = enCand.col;
+      }
+      if (tierCol < 0 || (tc < 0 && en < 0)) return;
+      matrix.slice(headerIndex + 1).forEach(row => addPrizeRow(row, tierCol, tc, en));
       usedHeader = true;
     });
     if (usedHeader) return;
@@ -2313,7 +2523,15 @@ function detectTierPrizeTable(matrices) {
     // Agency reward sheets may instead contain one language-neutral product name
     // plus blank/price columns (for example Tier 3-4 | Petits Fours | | $92).
     matrix.forEach(row => {
-      if (row.length < 2 || !normalizeTierId(wordCellText(row[0]))) return;
+      if (row.length < 2) return;
+      const tierCellRaw = wordCellText(row[0]);
+      // v4 beta: 淨係認短嘅 tier label（避免 body copy 段落度有「For tier0」被誤當 tier row）
+      if (tierCellRaw.length > 80) return;
+      if (!/^\s*(?:Tier|T)\s*\d/i.test(tierCellRaw)) return;
+      const tier = normalizeTierId(tierCellRaw);
+      if (!tier) return;
+      // v4 beta: 早前 matrix 已 detect 過就唔覆蓋
+      if (prizes[tier] && (prizes[tier].TC_alternatives || []).length > 0) return;
       const tcEvidence = wordLanguageEvidence(wordCellText(row[1]));
       const enEvidence = wordLanguageEvidence(wordCellText(row[2]));
       if (tcEvidence.cjk > 0 && enEvidence.latinWords > 0) {
@@ -2324,8 +2542,7 @@ function detectTierPrizeTable(matrices) {
         value && /[A-Za-z㐀-鿿]/.test(value) && !/^(?:HK)?\$?\s*[\d,.]+$/.test(value)
       );
       if (neutral) {
-        const tier = normalizeTierId(wordCellText(row[0]));
-        prizes[tier] = { TC: neutral, EN: neutral, neutral: true };
+        prizes[tier] = { TC: neutral, EN: neutral, neutral: true, TC_alternatives: [neutral], EN_alternatives: [neutral] };
       }
     });
   });
@@ -2352,7 +2569,82 @@ async function parseApprovedWord(file) {
   const deleted = xml.getElementsByTagNameNS('*', 'del').length;
   const highlights = xml.getElementsByTagNameNS('*', 'highlight').length;
   const enrollmentVariants = detectEnrollmentWordVariants(bilingual);
-  return { name: file.name, tc, en, subjects, tierPrizes: detectTierPrizeTable(matrices), enrollmentVariants, meta: { inserted, deleted, highlights, inferredColumns: bilingual.inferred } };
+  const tierPrizes = detectTierPrizeTable(matrices);
+  // v4 beta: 抽 tier prize 全部 alternatives 出嚟做 exclusion set，避免 Tier 獎品行走漏入 general body copy 對比
+  const prizeExclusion = new Set();
+  Object.values(tierPrizes).forEach(entry => {
+    (entry.TC_alternatives || (entry.TC ? [entry.TC] : [])).forEach(t => prizeExclusion.add(compactCopy(t)));
+    (entry.EN_alternatives || (entry.EN ? [entry.EN] : [])).forEach(t => prizeExclusion.add(compactCopy(t)));
+  });
+  // v4 beta: 偵測「For tier1-6」／「For tier X-Y」／「For tier X」等 section marker
+  // 由 marker 到下一個 marker（或 doc 結尾）之間嘅 segments 全部 tag 一個 tier range
+  const _FORTIER_RE = /^\s*For\s+tier\s*(\d+)\s*(?:[-–—]\s*(\d+))?\s*[:：]?\s*$/i;
+  // v4 beta: 檢查一段文字（去晒 label prefix 後）係咪 tier prize alternative 之一；係就返嗰個 tier
+  const _stripMissionRewardPrefix = (raw) => String(raw || '')
+    .replace(/^\s*(?:Mission\s*reward|任務獎勵)(?:\s*[\(（]\s*Pick\s*\d+\s*out\s*of\s*\d+\s*[\)）]|（\s*\d+\s*選\s*\d+\s*）)?\s*[:：]\s*/i, '')
+    .trim();
+  const _matchTierByPrize = (raw) => {
+    const candidates = [raw, _stripMissionRewardPrefix(raw)];
+    for (const cand of candidates) {
+      const compact = compactCopy(cand);
+      if (!compact) continue;
+      for (const [tier, entry] of Object.entries(tierPrizes)) {
+        const alts = [...(entry.TC_alternatives || []), ...(entry.EN_alternatives || [])];
+        for (const alt of alts) {
+          const altCompact = compactCopy(alt);
+          if (altCompact && (compact === altCompact || compact.includes(altCompact))) return tier;
+        }
+      }
+    }
+    return null;
+  };
+  const _tagTierRange = (list) => {
+    const ranges = new Map();  // compactKey → {start, end}
+    let cur = null;
+    const filtered = [];
+    list.forEach(text => {
+      const raw = String(text || '').trim();
+      const m = raw.match(_FORTIER_RE);
+      if (m) {
+        cur = { start: Number(m[1]), end: Number(m[2] || m[1]) };
+        return;
+      }
+      // whole-line label：純「Mission reward:」／「任務獎勵：」冇內容
+      if (/^\s*(?:Mission\s*reward|任務獎勵)(?:\s*[\(（]\s*Pick\s*\d+\s*out\s*of\s*\d+\s*[\)）]|（\s*\d+\s*選\s*\d+\s*）)?\s*[:：]?\s*$/i.test(raw)) return;
+      // label + prize 併埋一行：例如 "Mission reward: 7-Eleven HK$10 e-Voucher"
+      // 或者直接就係 tier prize alternative
+      const matchedTier = _matchTierByPrize(raw);
+      if (matchedTier) {
+        // 呢類段落唔應該入 general body copy — findTierPrize 已 handle
+        // 順手記低佢屬於邊個 tier，如果之後 mail-tier 唔匹配，都自動 skip
+        return;
+      }
+      filtered.push(raw);
+      if (cur) ranges.set(compactCopy(raw), cur);
+    });
+    return { list: filtered, ranges };
+  };
+  const tcTagged = _tagTierRange(tc);
+  const enTagged = _tagTierRange(en);
+  // v4 beta debug: 開 console 見到 parser 真實出面
+  try {
+    console.log('[v4 beta] Word parser output', {
+      tierPrizes,
+      prizeExclusion: [...prizeExclusion],
+      tcTotal: tc.length, tcAfter: tcTagged.list.length,
+      enTotal: en.length, enAfter: enTagged.list.length,
+      tcTierRangeCount: tcTagged.ranges.size,
+      enTierRangeCount: enTagged.ranges.size,
+      enDropped: en.filter(t => !tcTagged.list.includes(t) && !enTagged.list.includes(t)).slice(0, 20),
+    });
+  } catch (_) {}
+  return {
+    name: file.name,
+    tc: tcTagged.list, en: enTagged.list,
+    tcTierRange: tcTagged.ranges, enTierRange: enTagged.ranges,
+    subjects, tierPrizes, enrollmentVariants,
+    meta: { inserted, deleted, highlights, inferredColumns: bilingual.inferred },
+  };
 }
 function isDynamicMasterSegment(text) {
   return /(?:XXX|Dear\s+Sir\/?Madam|\{\{|WhatsApp|@[a-z0-9.-]+\.[a-z]{2,}|Chen\s+Manqi|\b(?:\+?852\s*)?\d{4}\s*\d{4}\b)/i.test(text)
@@ -2427,14 +2719,15 @@ function tierBounds(raw) {
   return { start: Number(match[1]), end: Number(match[2] || match[1]) };
 }
 function findTierPrize(tierPrizes, tierId, lang) {
+  const altsKey = lang + '_alternatives';
   const exact = tierPrizes[tierId];
-  if (exact && exact[lang]) return { tier: tierId, text: exact[lang] };
+  if (exact && exact[lang]) return { tier: tierId, text: exact[lang], alternatives: exact[altsKey] || [exact[lang]] };
   const wanted = tierBounds(tierId);
   if (!wanted || wanted.start !== wanted.end) return null;
   for (const [candidateTier, value] of Object.entries(tierPrizes)) {
     const range = tierBounds(candidateTier);
     if (range && range.start <= wanted.start && wanted.start <= range.end && value[lang]) {
-      return { tier: candidateTier, text: value[lang] };
+      return { tier: candidateTier, text: value[lang], alternatives: value[altsKey] || [value[lang]] };
     }
   }
   return null;
@@ -2453,12 +2746,19 @@ function prizeIdentityKey(text) {
   if (/palmier|蝴蝶酥(?:禮盒)?/.test(value)) return 'agnes-palmier';
   return '';
 }
-function approvedPrizeMatchesEmail(prizeText, emailText, lang) {
-  const expected = compactCopy(prizeText);
+function approvedPrizeMatchesEmail(prizeInfo, emailText, lang) {
+  // v4 beta: 支援 alternatives — 只要 email 命中 tier 內任一款禮物就當一致
+  const alternatives = typeof prizeInfo === 'string'
+    ? [prizeInfo]
+    : (prizeInfo && prizeInfo.alternatives && prizeInfo.alternatives.length ? prizeInfo.alternatives : [prizeInfo && prizeInfo.text || '']);
   const body = compactCopy(emailText);
-  if (expected && body.includes(expected)) return true;
-  const identity = prizeIdentityKey(prizeText);
-  return !!identity && prizeIdentityKey(emailText) === identity;
+  for (const alt of alternatives) {
+    const expected = compactCopy(alt);
+    if (expected && body.includes(expected)) return true;
+    const identity = prizeIdentityKey(alt);
+    if (identity && prizeIdentityKey(emailText) === identity) return true;
+  }
+  return false;
 }
 function checkApprovedWordCopy(mail, tierId, master) {
   if (!master) return [];
@@ -2470,8 +2770,21 @@ function checkApprovedWordCopy(mail, tierId, master) {
     source = source.filter(text => compactCopy(text) !== subjectKey);
   }
   const tierAlternatives = collectTierAlternativeGiftGroups(source);
-  const masterSegments = [...new Set(source.map((text, index) => tierAlternatives.consumed.has(index) ? '' : cleanMasterSegment(text)))]
-    .filter(text => text.length >= 8 && !isDynamicMasterSegment(text) && !/^[\d\s☐☑✓✔•|+()*_.-]+$/.test(text));
+  // v4 beta: 用 "For tier X-Y" section gating — 只有 mail tier 喺 range 內先比對嗰批 segments
+  const tierRangeMap = lang === 'TC' ? (master.tcTierRange || new Map()) : (master.enTierRange || new Map());
+  const mailBounds = tierBounds(tierId);
+  const segmentInScope = (segRaw) => {
+    if (!mailBounds) return true;  // 冇 tier 資訊就唔限
+    const key = compactCopy(segRaw);
+    const range = tierRangeMap.get(key);
+    if (!range) return true;  // 冇 tier tag = 通用文案
+    return range.start <= mailBounds.start && mailBounds.end <= range.end;
+  };
+  const masterSegments = [...new Set(source.map((text, index) => {
+    if (tierAlternatives.consumed.has(index)) return '';
+    if (!segmentInScope(text)) return '';
+    return cleanMasterSegment(text);
+  }))].filter(text => text.length >= 8 && !isDynamicMasterSegment(text) && !/^[\d\s☐☑✓✔•|+()*_.-]+$/.test(text));
   const emailDoc = parseDom(mail.html);
   const emailParas = extractParagraphs(emailDoc);
   // Existence check uses the whole rendered body text because EDM checklist/CTA copy is
@@ -2519,15 +2832,20 @@ function checkApprovedWordCopy(mail, tierId, master) {
   });
   const expectedPrize = findTierPrize(master.tierPrizes, tierId, lang);
   if (expectedPrize) {
-    if (!approvedPrizeMatchesEmail(expectedPrize.text, emailFullText, lang)) {
-      const wrong = Object.entries(master.tierPrizes).find(([otherTier, value]) =>
-        otherTier !== tierId && value[lang] && approvedPrizeMatchesEmail(value[lang], emailFullText, lang)
-      );
+    if (!approvedPrizeMatchesEmail(expectedPrize, emailFullText, lang)) {
+      // v4 beta: 對其他 tier 嘅 alternatives 都要 check
+      const wrong = Object.entries(master.tierPrizes).find(([otherTier, value]) => {
+        if (otherTier === tierId || !value[lang]) return false;
+        const otherInfo = { text: value[lang], alternatives: value[lang + '_alternatives'] || [value[lang]] };
+        return approvedPrizeMatchesEmail(otherInfo, emailFullText, lang);
+      });
+      const altsText = expectedPrize.alternatives && expectedPrize.alternatives.length > 1
+        ? `<div class="ecm-snippet">Tier 內任何一款都得：<br>${expectedPrize.alternatives.map(a => '• ' + escapeHtml(a)).join('<br>')}</div>` : '';
       issues.push({
         severity: 'err', category: 'Word Tier獎品',
         message: wrong
-          ? `呢封係 <b>${escapeHtml(tierId)}</b>，但搵到 <b>${escapeHtml(wrong[0])}</b> 獎品「${escapeHtml(wrong[1][lang])}」；Word 預期係「${escapeHtml(expectedPrize.text)}」`
-          : `呢封係 <b>${escapeHtml(tierId)}</b>，Word 預期獎品「${escapeHtml(expectedPrize.text)}」${expectedPrize.tier !== tierId ? `（按 ${escapeHtml(expectedPrize.tier)}）` : ''}，Email 內搵唔到`,
+          ? `呢封係 <b>${escapeHtml(tierId)}</b>，但搵到 <b>${escapeHtml(wrong[0])}</b> 獎品「${escapeHtml(wrong[1][lang])}」；Word 預期呢個 tier 應該係「${escapeHtml(expectedPrize.text)}」${altsText}`
+          : `呢封係 <b>${escapeHtml(tierId)}</b>，Word 預期獎品「${escapeHtml(expectedPrize.text)}」${expectedPrize.tier !== tierId ? `（按 ${escapeHtml(expectedPrize.tier)}）` : ''}，Email 內任何一款都搵唔到${altsText}`,
       });
     }
   }
@@ -3080,6 +3398,55 @@ async function runChecks() {
       r.styleDiffsDesktop = rowStyleDiffs(r, 'styleDesktop');  // computed @ 1200
       r.textAnalysis = rowTextAnalysis(r);
     });
+
+    // v4 beta: 有 Word Tier 獎品表時，用「每封對自己 Tier 嘅 Word 禮物」重新分類
+    // 原本 4 封唔同 tier 各自唔同禮物會出紅色 mismatch；
+    // 呢個 pass 會確認每封嘅禮物都對到 Word 表入面自己 tier 嘅正名，然後將該 row 轉做紫色 gift（正常變化）。
+    if (state.wordMaster && state.wordMaster.tierPrizes && Object.keys(state.wordMaster.tierPrizes).length > 0 && mails.length >= 2) {
+      const mailLangs = mails.map(m => detectCopyLanguage(m));
+      const tierIds = tiers.map(t => t && t.id);
+      let reclassified = 0;
+      rows.forEach(r => {
+        if (r.kind !== 'mismatch') return;
+        const presentCells = r.cells.map((c, mi) => c ? { c, mi } : null).filter(Boolean);
+        if (presentCells.length < 2) return;
+        // 每個 present cell 都要包住 gift keyword 先值得再判
+        if (!presentCells.every(x => isGiftItem(x.c.text))) return;
+        // 逐 cell 對自己 tier 嘅 Word 禮物；全部命中先轉做 gift
+        const allMatchOwnTier = presentCells.every(({ c, mi }) => {
+          const tierId = tierIds[mi];
+          const lang = mailLangs[mi];
+          if (!tierId || !lang) return false;
+          const expected = findTierPrize(state.wordMaster.tierPrizes, tierId, lang);
+          if (!expected) return false;
+          return approvedPrizeMatchesEmail(expected, c.text, lang);
+        });
+        if (allMatchOwnTier) {
+          r.kind = 'gift';
+          r.wordTierValidated = true;
+          reclassified++;
+        }
+      });
+      if (reclassified > 0) {
+        // 更新 stats（因為分類改咗）
+        stats.mismatch = Math.max(0, (stats.mismatch || 0) - reclassified);
+        stats.gift = (stats.gift || 0) + reclassified;
+      }
+    }
+
+    // v4 beta: 四大維度加強
+    if (mails.length >= 2) {
+      const textPos = crossTextPositionIssues(rows, mails, tierLabelOf);
+      textPos.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+      const punctDiff = crossPunctuationIssues(rows, mails, tierLabelOf);
+      punctDiff.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+      const unmatchedList = unmatchedSegmentIssues(rows, mails, tierLabelOf);
+      unmatchedList.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+      try {
+        const imgHash = await crossImageHashIssues(mails, tierLabelOf);
+        imgHash.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+      } catch (e) { console.warn('v4 beta image hash pass failed:', e); }
+    }
     const styleDiffRowCount = rows.filter(r =>
       (r.styleDiffsMobile.length > 0 || r.styleDiffsDesktop.length > 0)
       && r.kind !== 'tieronly' && r.kind !== 'gift'
@@ -3262,12 +3629,24 @@ function renderOverview() {
   if (state.wordMaster) {
     const wordIssues = singlePerMail.flat().filter(issue => /^Word/.test(issue.category));
     const tierCount = Object.keys(state.wordMaster.tierPrizes).length;
+    // v4 beta debug: 直接喺頁上顯示 tierPrizes.T0/T3 拎到嘅 alternatives，方便診斷
+    const _dumpTier = (tid) => {
+      const e = state.wordMaster.tierPrizes[tid];
+      if (!e) return `${tid}: <i>(未 detect 到)</i>`;
+      const tc = (e.TC_alternatives || [e.TC]).map(escapeHtml).join(' / ') || '(空)';
+      const en = (e.EN_alternatives || [e.EN]).map(escapeHtml).join(' / ') || '(空)';
+      return `<b>${tid}</b> · TC: ${tc} · EN: ${en}`;
+    };
+    const debugDump = ['T0','T1-2','T3','T4-6'].map(_dumpTier).join('<br>');
     html += `<div class="card" style="border-left:4px solid ${wordIssues.length ? '#f5b800' : '#43a047'};">
       <h2>📘 Approved Word 比對</h2>
       <div style="font-size:13px;line-height:1.6;color:#405159;">
         <b>${escapeHtml(state.wordMaster.name)}</b> · TC ${state.wordMaster.tc.length} 段／EN ${state.wordMaster.en.length} 段 ·
         ${tierCount ? `${tierCount} 組 Tier 獎品` : '未提供 Tier 獎品表'}<br>
         ${wordIssues.length ? `<span style="color:#b26a00;font-weight:650;">⚠️ 發現 ${wordIssues.length} 項 Word 文案／獎品問題；詳情已貼到下面各封 Email。</span>` : '<span style="color:#2e7d32;font-weight:650;">✓ 未發現 Word master copy 差異</span>'}
+        <details style="margin-top:8px;"><summary style="cursor:pointer;color:#0366d6;">🔍 v4 debug: Word parser 讀到嘅 Tier 獎品</summary>
+          <div style="font-family:monospace;font-size:11px;background:#f6f8fa;padding:8px;border-radius:4px;margin-top:6px;line-height:1.5;">${debugDump}</div>
+        </details>
       </div>
     </div>`;
   }
