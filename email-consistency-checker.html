@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v3.24.1</title>
+<title>SUN仔 EDM及 Website 小助手 v3.25.2</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.24.1</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v3.25.2</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -488,7 +488,7 @@
         <input type="file" id="fileInput" multiple accept=".eml,.html,.htm,.xml,.zip,message/rfc822,text/html,application/xml,text/xml,application/zip">
         <div class="icon">📥</div>
         <div class="title">拖 .eml / .html / .xml / .zip／完整網頁資料夾入嚟，或按呢度選擇</div>
-        <div class="hint">支援一次過多封檔案；ZIP 會自動解出 index.html，folder／ZIP 內圖片、CSS、字型會一齊載入</div>
+        <div class="hint">支援一次過多封檔案；ZIP 會自動解出 index.html，folder／ZIP 內圖片、CSS、字型會一齊載入；responsive 圖片會加做本機 OCR 文字核對</div>
       </label>
       <div class="url-input-row">
         <input type="url" id="urlInput" placeholder="或者貼 EDM 網頁版 URL（例：https://campaign.sunlife.com.hk/...）">
@@ -566,12 +566,14 @@
         </ul>
         <h3>圖片跨MAIL比對</h3>
         <ul>
+          <li><b>Mobile／PC responsive 圖片文字 OCR：</b>同一區塊用不同 Mobile／Desktop 圖時，除咗並排原圖，會以中英文 OCR 比較可見文字及數字／日期／金額。相同文案只係換行不同會視為大致一致；信心不足或模型載入失敗只要求人手核對，唔會阻塞其他檢查。OCR library／模型按需要下載，圖片喺 browser 內處理。</li>
           <li>比對 <code>&lt;img&gt;</code> 數量：3+封MAIL用 majority vote，少數outlier會flag「圖片數量同其他N封唔一致」</li>
           <li>比對 <code>width</code> / <code>height</code>：majority vote，尺寸outlier會flag</li>
           <li><b>跨 MAIL 圖片次序</b>：以圖片最近嘅標題作 anchor；只有同一張圖被放到不同內容標題之下先提示。普通文案或金額不同唔會再當圖片移位。</li>
           <li><b>圖片對齊（置左/中/右）跨MAIL</b>：用 bounding-box 量度每張圖喺容器內嘅水平位置，喺 Mobile + Desktop 兩個viewport分別check。majority vote：某封MAIL圖片置中但其他置左 → flag</li>
           <li><b>內容 Icon 方向一致性（單封MAIL）⭐</b>：比較同一內容組內各 icon 嘅方向；<b>全部置左或全部置中都視為正常</b>，只有混合方向先警告。Banner / hero / CTA（闊圖）同頂部 logo 自動排除。</li>
           <li><b>圖片定位 debug</b>：像素差只保留喺收合 debug 表，方便技術驗證量度；一般 QA 提示只列出每張 icon 嘅方向，唔顯示像素。</li>
+          <li><b>Bullet／編號清單位置：</b>比較相同標題下面整個 <code>&lt;ul&gt;</code>／<code>&lt;ol&gt;</code> 嘅實際水平起點；即使各項都係 <code>text-align:left</code>，外層 padding／margin 令整組向左／右偏移仍會提示。Mobile 375 及 Desktop 1200 分開判斷，Tier 禮物文字及項目數量可以不同。</li>
           <li>用途：搵mobile版icon shift、被template漏走嘅圖、圖片size mismatch、圖片排位錯亂、圖片對齊唔一致</li>
         </ul>
         <h3>Viewport 切換</h3>
@@ -922,7 +924,7 @@ async function computeParagraphStyles(mail, viewportWidth) {
       if (done) return; done = true;
       try {
         const doc = iframe.contentDocument;
-        if (!doc) { document.body.removeChild(iframe); resolve({ paras: [], images: [] }); return; }
+        if (!doc) { document.body.removeChild(iframe); resolve({ paras: [], images: [], lists: [] }); return; }
         const win = iframe.contentWindow;
         const paraNodes = Array.from(doc.querySelectorAll(PARA_SELECTOR)).filter(n => (n.textContent || '').replace(/\s+/g, ' ').trim());
         const paras = paraNodes.map(n => {
@@ -948,6 +950,7 @@ async function computeParagraphStyles(mail, viewportWidth) {
         const imgNodes = Array.from(doc.querySelectorAll('img'));
         const images = imgNodes.map((img, di) => {
           const ir = img.getBoundingClientRect();
+          const imgCs = win.getComputedStyle(img);
           // container width for ratio (walk up past hugging wrappers)
           let container = img.parentElement, cr = container ? container.getBoundingClientRect() : null, guard = 0;
           while (container && cr && cr.width < ir.width * 1.2 && guard < 5) {
@@ -990,16 +993,65 @@ async function computeParagraphStyles(mail, viewportWidth) {
           for (let k = pos - 1; k >= 0; k--) { if (hasTxt(allNodes[k])) { prevHasText = true; break; } }
           return {
             id: imgIdentity(img), domIndex: di,
+            src: img.getAttribute('src') || '',
+            visible: ir.width > 0 && ir.height > 0 && imgCs.display !== 'none' && imgCs.visibility !== 'hidden',
             align: classifyImageAlign(win, doc, img),
             left: ir.left, width: ir.width, widthRatio,
             nextText, prevHasText, groupKey,
           };
         });
+        // List-block geometry is measured separately from each <li>'s text-align.
+        // A list can be visually shifted by wrapper padding / negative margins while every
+        // item still reports text-align:left. Anchor it to the nearest preceding paragraph
+        // so Tier-specific gift wording and item counts do not prevent cross-mail matching.
+        const lists = Array.from(doc.querySelectorAll('ul, ol')).map((list, listIndex) => {
+          const directItems = Array.from(list.children).filter(child => child.tagName === 'LI');
+          const firstItem = directItems[0];
+          if (!firstItem) return null;
+          const listCs = win.getComputedStyle(list);
+          const itemCs = win.getComputedStyle(firstItem);
+          const itemRange = doc.createRange();
+          itemRange.selectNodeContents(firstItem);
+          const itemRect = itemRange.getBoundingClientRect();
+          const visible = itemRect.width > 0 && itemRect.height > 0
+            && listCs.display !== 'none' && listCs.visibility !== 'hidden'
+            && itemCs.display !== 'none' && itemCs.visibility !== 'hidden';
+          // The label immediately before an email list is often bare text inside <td>/<div>,
+          // not a <p>/<h*>. Walk visible text nodes so anchors such as
+          // "Mission reward (Pick 1 out of 4):" are captured correctly.
+          let anchorText = '';
+          const walker = doc.createTreeWalker(doc.body || doc.documentElement, win.NodeFilter.SHOW_TEXT);
+          let textNode;
+          while ((textNode = walker.nextNode())) {
+            const owner = textNode.parentElement;
+            if (!owner || list.contains(owner) || /^(?:SCRIPT|STYLE|NOSCRIPT)$/i.test(owner.tagName)) continue;
+            if ((textNode.compareDocumentPosition(list) & 4) === 0) continue;
+            const value = String(textNode.nodeValue || '').replace(/\s+/g, ' ').trim();
+            if (!value) continue;
+            const ownerCs = win.getComputedStyle(owner);
+            if (ownerCs.display === 'none' || ownerCs.visibility === 'hidden') continue;
+            const textRange = doc.createRange(); textRange.selectNodeContents(textNode);
+            const textRect = textRange.getBoundingClientRect();
+            if (!textRect.width || !textRect.height) continue;
+            anchorText = value;
+          }
+          return {
+            listIndex,
+            tag: list.tagName.toLowerCase(),
+            visible,
+            left: itemRect.left,
+            anchor: maskTierVariables(anchorText),
+            anchorText,
+            itemCount: directItems.length,
+            firstText: (firstItem.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+            firstParaIndex: paraNodes.indexOf(firstItem),
+          };
+        }).filter(Boolean);
         document.body.removeChild(iframe);
-        resolve({ paras, images });
+        resolve({ paras, images, lists });
       } catch (e) {
         try { document.body.removeChild(iframe); } catch(_) {}
-        resolve({ paras: [], images: [] });
+        resolve({ paras: [], images: [], lists: [] });
       }
     };
     iframe.onload = () => setTimeout(finish, 150);  // allow fonts + late CSS a moment
@@ -1205,6 +1257,136 @@ function isNonContentImage(im) {
   const id = String(im.id || '');
   return im.widthRatio > 0.6 || /(?:^|[_\-\s])(kv|hero|banner|logo)(?:[_\-\s.]|$)/i.test(id);
 }
+
+// SINGLE-MAIL: detect an art-directed responsive image swap.
+// Email builders commonly place two adjacent hero/banner <img> elements in the DOM,
+// then show one only on mobile and the other only on desktop. This is easy to miss
+// in a single viewport, so surface it for review when the two actual assets differ.
+// Keep the scope narrow: adjacent non-content images only. Normal resizing of the
+// same image, or unrelated images elsewhere in the email, must not be flagged.
+function findResponsiveImageSwaps(mail) {
+  const mobile = (mail.layoutMobile && mail.layoutMobile.images) || [];
+  const desktop = (mail.layoutDesktop && mail.layoutDesktop.images) || [];
+  if (!mobile.length || !desktop.length) return [];
+
+  const mobileByIndex = new Map(mobile.map(im => [im.domIndex, im]));
+  const desktopByIndex = new Map(desktop.map(im => [im.domIndex, im]));
+  const mobileOnly = mobile.filter(im => {
+    const desktopVersion = desktopByIndex.get(im.domIndex);
+    return im.visible && desktopVersion && !desktopVersion.visible;
+  });
+  const desktopOnly = desktop.filter(im => {
+    const mobileVersion = mobileByIndex.get(im.domIndex);
+    return im.visible && mobileVersion && !mobileVersion.visible;
+  });
+
+  const usedMobile = new Set();
+  const pairs = [];
+  desktopOnly.forEach(desktopImage => {
+    const candidates = mobileOnly
+      .filter(mobileImage => !usedMobile.has(mobileImage.domIndex))
+      .filter(mobileImage => Math.abs(mobileImage.domIndex - desktopImage.domIndex) === 1)
+      .filter(mobileImage => isNonContentImage(mobileImage) && isNonContentImage(desktopImage));
+    const mobileImage = candidates[0];
+    if (!mobileImage || mobileImage.id === desktopImage.id) return;
+    usedMobile.add(mobileImage.domIndex);
+    pairs.push({ mobileImage, desktopImage });
+  });
+  return pairs;
+}
+
+function responsivePairKey(pair) {
+  return `${pair.mobileImage.domIndex}:${pair.desktopImage.domIndex}`;
+}
+
+function ocrCopyKey(text) {
+  return String(text || '').normalize('NFKC').toLowerCase()
+    .replace(/[\s\p{P}\p{S}]/gu, '');
+}
+
+function ocrFacts(text) {
+  return Array.from(String(text || '').matchAll(/(?:hk\$|hkd)?\s*\d[\d,]*(?:\.\d+)?/gi))
+    .map(match => match[0].toLowerCase().replace(/[\s,]/g, ''))
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .sort();
+}
+
+function compareResponsiveOcr(mobile, desktop) {
+  if (!mobile || !desktop || mobile.status !== 'ok' || desktop.status !== 'ok') {
+    return { status: 'unavailable', score: null, factsMismatch: false };
+  }
+  const mobileKey = ocrCopyKey(mobile.text);
+  const desktopKey = ocrCopyKey(desktop.text);
+  if (mobileKey.length < 8 || desktopKey.length < 8 || mobile.confidence < 40 || desktop.confidence < 40) {
+    return { status: 'inconclusive', score: null, factsMismatch: false };
+  }
+  const score = similarity(mobileKey, desktopKey);
+  const mobileFacts = ocrFacts(mobile.text);
+  const desktopFacts = ocrFacts(desktop.text);
+  const factsMismatch = mobileFacts.length > 0 && desktopFacts.length > 0
+    && mobileFacts.join('|') !== desktopFacts.join('|');
+  return {
+    status: factsMismatch || score < 0.72 ? 'different' : 'similar',
+    score,
+    factsMismatch,
+  };
+}
+
+function ocrExcerpt(result) {
+  if (!result || result.status !== 'ok') return '未能辨識';
+  const value = String(result.text || '').replace(/\s+/g, ' ').trim();
+  return value ? value.slice(0, 240) : '未辨識到文字';
+}
+
+function responsiveOcrHtml(ocr) {
+  if (!ocr) return '<div class="ecm-ocr-status neutral">OCR：未執行</div>';
+  const comparison = compareResponsiveOcr(ocr.mobile, ocr.desktop);
+  let label = 'OCR：未能完成（原有圖片核對仍然有效）';
+  let cls = 'neutral';
+  if (comparison.status === 'different') {
+    label = `⚠ OCR 讀到 Mobile／PC 圖片文字可能不同${comparison.factsMismatch ? '，當中數字／日期／金額亦有差異' : ''}`;
+    cls = 'different';
+  } else if (comparison.status === 'similar') {
+    label = `✓ OCR 文字大致一致（相似度 ${Math.round(comparison.score * 100)}%）`;
+    cls = 'similar';
+  } else if (comparison.status === 'inconclusive') {
+    label = 'OCR：文字太少或辨識信心不足，請按原圖人手核對';
+  }
+  return `<div class="ecm-ocr-status ${cls}">${escapeHtml(label)}</div>
+    <div class="ecm-ocr-compare">
+      <div><b>📱 OCR</b><span>${escapeHtml(ocrExcerpt(ocr.mobile))}</span></div>
+      <div><b>💻 OCR</b><span>${escapeHtml(ocrExcerpt(ocr.desktop))}</span></div>
+    </div>`;
+}
+
+function checkResponsiveImageSwap(mail) {
+  const issues = [];
+  findResponsiveImageSwaps(mail).forEach(pair => {
+    const { mobileImage, desktopImage } = pair;
+    const ocr = mail.responsiveImageOcr && mail.responsiveImageOcr[responsivePairKey(pair)];
+    issues.push({
+      severity: 'warn',
+      category: 'Mobile／PC 圖片文字需核對',
+      imgIndex: desktopImage.domIndex,
+      message: `同一 responsive 區塊使用兩張不同圖片；檔名不同本身可以係正常，請集中核對圖中文字：
+        <div class="ecm-responsive-compare">
+          <a class="ecm-responsive-card" href="${escapeAttr(mobileImage.src)}" target="_blank" rel="noopener">
+            <span class="ecm-responsive-label">📱 Mobile 375</span>
+            <img src="${escapeAttr(mobileImage.src)}" alt="Mobile responsive 圖片" />
+            <code>${escapeHtml(mobileImage.id)}</code>
+          </a>
+          <a class="ecm-responsive-card" href="${escapeAttr(desktopImage.src)}" target="_blank" rel="noopener">
+            <span class="ecm-responsive-label">💻 Desktop 1200</span>
+            <img src="${escapeAttr(desktopImage.src)}" alt="Desktop responsive 圖片" />
+            <code>${escapeHtml(desktopImage.id)}</code>
+          </a>
+        </div>
+        ${responsiveOcrHtml(ocr)}
+        <div class="ecm-copy-checklist"><b>圖片文字 QA：</b>標題／副標題、日期、金額／獎品名稱、TC／EN、標點及換行意思。按圖片可開原圖放大。</div>`,
+    });
+  });
+  return issues;
+}
 function checkImageContentAlign(mail) {
   const issues = [];
   const perImgFlagged = {};  // domIndex → {label:diff} to merge viewports
@@ -1367,6 +1549,71 @@ function crossImagePositionIssues(mails, tierLabelOf) {
       });
     }
   }
+  return perMail;
+}
+
+// Cross-mail list indentation / horizontal-position check.
+// This intentionally compares the first visible item's rendered X position, not text-align:
+// wrapper padding or negative margins can shift a whole bullet list while CSS still says left.
+function crossListPositionIssues(mails, tierLabelOf) {
+  const perMail = mails.map(() => []);
+  const pendingByMail = mails.map(() => new Map());
+  const viewports = [
+    ['layoutMobile', '📱 Mobile 375'],
+    ['layoutDesktop', '💻 Desktop 1200'],
+  ];
+  viewports.forEach(([layoutKey, viewportLabel]) => {
+    const listsPerMail = mails.map(mail => ((mail[layoutKey] && mail[layoutKey].lists) || [])
+      .filter(list => list.visible && list.anchor));
+    const anchors = new Set();
+    listsPerMail.forEach(lists => lists.forEach(list => anchors.add(list.anchor)));
+    anchors.forEach(anchor => {
+      const entries = listsPerMail.map((lists, mail) => {
+        const list = lists.find(candidate => candidate.anchor === anchor);
+        return list ? { mail, list, left: Math.round(list.left) } : null;
+      }).filter(Boolean);
+      if (entries.length < 2) return;
+      const positions = entries.map(entry => entry.left);
+      if (Math.max(...positions) - Math.min(...positions) <= 8) return;
+
+      const groups = {};
+      entries.forEach(entry => {
+        const key = String(entry.left);
+        if (!groups[key]) groups[key] = { left: entry.left, entries: [] };
+        groups[key].entries.push(entry);
+      });
+      const grouped = Object.values(groups).sort((a, b) => b.entries.length - a.entries.length);
+      const majority = grouped[0].entries.length > entries.length / 2 ? grouped[0] : null;
+      const flagged = majority ? entries.filter(entry => entry.left !== majority.left) : entries;
+      flagged.forEach(entry => {
+        const comparisonLeft = majority
+          ? majority.left
+          : Math.round(entries.filter(other => other.mail !== entry.mail).reduce((sum, other) => sum + other.left, 0) / Math.max(1, entries.length - 1));
+        const diff = entry.left - comparisonLeft;
+        const direction = diff > 0 ? '向右縮入' : '向左移出';
+        const key = `${entry.list.anchor}:${entry.list.firstParaIndex}`;
+        if (!pendingByMail[entry.mail].has(key)) {
+          pendingByMail[entry.mail].set(key, { list: entry.list, viewports: [] });
+        }
+        pendingByMail[entry.mail].get(key).viewports.push({ viewportLabel, direction, diff: Math.abs(diff), majority, entries });
+      });
+    });
+  });
+
+  pendingByMail.forEach((pending, mail) => {
+    pending.forEach(({ list, viewports }) => {
+      const details = viewports.map(view => {
+        const others = view.majority
+          ? view.majority.entries.map(entry => tierLabelOf(entry.mail)).join('、')
+          : view.entries.filter(entry => entry.mail !== mail).map(entry => tierLabelOf(entry.mail)).join('、');
+        return `<b>${escapeHtml(view.viewportLabel)}</b>：成個清單比 ${escapeHtml(others)} ${view.direction}約 <b>${view.diff}px</b>`;
+      }).join('<br>');
+      perMail[mail].push({
+        severity: 'warn', category: '清單水平位置', paraIndex: list.firstParaIndex,
+        message: `「${escapeHtml(list.anchorText.slice(0, 60))}」下面嘅 bullet 清單起點同其他 MAIL 不一致。各項文字雖然都係置左，但外層 padding／margin 令整組位置偏移：<div class="ecm-snippet">${details}</div>`,
+      });
+    });
+  });
   return perMail;
 }
 
@@ -2267,6 +2514,89 @@ const state = {
   wordMaster: null,          // optional approved DOCX master; no effect when absent
 };
 
+const OCR_SCRIPT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+const OCR_SCRIPT_INTEGRITY = 'sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F';
+let ocrLibraryPromise = null;
+
+function withTimeout(promise, timeoutMs, message) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), timeoutMs); }),
+  ]);
+}
+
+function loadOcrLibrary() {
+  if (window.Tesseract && window.Tesseract.createWorker) return Promise.resolve(window.Tesseract);
+  if (ocrLibraryPromise) return ocrLibraryPromise;
+  ocrLibraryPromise = withTimeout(new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = OCR_SCRIPT_URL;
+    script.async = true;
+    script.crossOrigin = 'anonymous';
+    script.integrity = OCR_SCRIPT_INTEGRITY;
+    script.onload = () => window.Tesseract && window.Tesseract.createWorker
+      ? resolve(window.Tesseract)
+      : reject(new Error('OCR library 已載入但無法啟動'));
+    script.onerror = () => reject(new Error('無法下載 OCR library'));
+    document.head.appendChild(script);
+  }), 20000, 'OCR library 載入逾時').catch(err => {
+    ocrLibraryPromise = null;
+    throw err;
+  });
+  return ocrLibraryPromise;
+}
+
+function setRunProgress(title, detail) {
+  reportContainer.innerHTML = `<div class="empty">${escapeHtml(title)}<div style="font-size:11px;margin-top:6px;">${escapeHtml(detail || '')}</div></div>`;
+}
+
+async function runResponsiveImageOcr(mails) {
+  const jobs = [];
+  mails.forEach(mail => {
+    mail.responsiveImageOcr = {};
+    findResponsiveImageSwaps(mail).forEach(pair => jobs.push({ mail, pair }));
+  });
+  if (!jobs.length) return;
+
+  const sources = Array.from(new Set(jobs.flatMap(job => [job.pair.mobileImage.src, job.pair.desktopImage.src]).filter(Boolean)));
+  if (!sources.length) return;
+  const cache = new Map();
+  let worker = null;
+  try {
+    setRunProgress('🔎 OCR 圖片文字準備中…', '首次使用會下載中英文 OCR 模型；圖片只喺 browser 內辨識');
+    const Tesseract = await loadOcrLibrary();
+    worker = await withTimeout(Tesseract.createWorker(['eng', 'chi_tra'], 1), 90000, 'OCR 中英文模型載入逾時');
+    for (let index = 0; index < sources.length; index++) {
+      const source = sources[index];
+      setRunProgress('🔎 OCR 圖片文字辨識中…', `${index + 1} / ${sources.length}；完成後會自動顯示報告`);
+      try {
+        const result = await withTimeout(worker.recognize(source), 60000, '單張圖片 OCR 逾時');
+        cache.set(source, {
+          status: 'ok',
+          text: result && result.data ? result.data.text : '',
+          confidence: Number(result && result.data ? result.data.confidence : 0),
+        });
+      } catch (err) {
+        cache.set(source, { status: 'failed', error: err && err.message ? err.message : String(err) });
+      }
+    }
+  } catch (err) {
+    sources.forEach(source => cache.set(source, { status: 'failed', error: err && err.message ? err.message : String(err) }));
+  } finally {
+    if (worker) {
+      try { await worker.terminate(); } catch (_) {}
+    }
+  }
+
+  jobs.forEach(({ mail, pair }) => {
+    mail.responsiveImageOcr[responsivePairKey(pair)] = {
+      mobile: cache.get(pair.mobileImage.src) || { status: 'failed' },
+      desktop: cache.get(pair.desktopImage.src) || { status: 'failed' },
+    };
+  });
+}
+
 function setResultTabsDisabled(disabled) {
   document.querySelectorAll('[data-tab="preview"], [data-tab="multi"]').forEach(btn => { btn.disabled = disabled; });
 }
@@ -2658,6 +2988,7 @@ async function runChecks() {
     m.computedMobile  = m.layoutMobile.paras;
     m.computedDesktop = m.layoutDesktop.paras;
   }
+  await runResponsiveImageOcr(mails);
   await new Promise(r => setTimeout(r, 30));
 
     const singlePerMail = sorted.map(row => {
@@ -2675,6 +3006,7 @@ async function runChecks() {
         ...checkCouponTerm(row.parsed),
         ...checkBrandSpelling(row.parsed),
         ...checkMoneyFormat(row.parsed),
+        ...checkResponsiveImageSwap(row.parsed),
         ...checkIntraMailIconConsistency(row.parsed),
         ...checkHtmlNoise(row.parsed),
         ...checkApprovedWordCopy(row.parsed, row.tier, state.wordMaster),
@@ -2689,6 +3021,8 @@ async function runChecks() {
     imgPosPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
     const imgAlignPerMail = mails.length >= 2 ? crossImageAlignIssues(mails, tierLabelOf) : mails.map(() => []);
     imgAlignPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+    const listPositionPerMail = mails.length >= 2 ? crossListPositionIssues(mails, tierLabelOf) : mails.map(() => []);
+    listPositionPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
 
     const alignment = mails.length >= 2 ? buildAlignmentRows(mails) : { rows: [], lists: [] };
     const rows = alignment.rows;
@@ -3093,6 +3427,36 @@ const ANNOTATION_CSS = `
     background: rgba(0,0,0,.05) !important; border-radius: 4px !important; display: block !important;
     color: #1a2027 !important; line-height: 1.5 !important;
   }
+  .ecm-responsive-compare {
+    display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 8px !important; margin-top: 8px !important;
+  }
+  .ecm-responsive-card {
+    display: flex !important; flex-direction: column !important; gap: 5px !important;
+    min-width: 0 !important; padding: 7px !important; border-radius: 6px !important;
+    border: 1px solid rgba(0,0,0,.1) !important; background: rgba(255,255,255,.78) !important;
+    color: #1a2027 !important; text-decoration: none !important;
+  }
+  .ecm-responsive-card img {
+    display: block !important; width: 100% !important; height: 120px !important;
+    object-fit: contain !important; background: #f3f4f5 !important; outline: none !important;
+  }
+  .ecm-responsive-card code {
+    display: block !important; overflow-wrap: anywhere !important; font-size: 9px !important;
+    background: rgba(0,0,0,.05) !important; padding: 3px 4px !important;
+  }
+  .ecm-responsive-label { font-size: 10px !important; font-weight: 700 !important; color: #405159 !important; }
+  .ecm-ocr-status { margin-top: 8px; border-radius: 7px; padding: 7px 9px; font-size: 11px !important; font-weight: 700 !important; background: #f1f4f6; color: #53636e; }
+  .ecm-ocr-status.similar { background: #e9f6ec; color: #237b38; }
+  .ecm-ocr-status.different { background: #ffebee; color: #c62828; }
+  .ecm-ocr-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+  .ecm-ocr-compare > div { min-width: 0; border: 1px solid #e3e7ea; border-radius: 7px; padding: 7px; background: rgba(255,255,255,.72); }
+  .ecm-ocr-compare b { display: block; font-size: 10px !important; color: #60717d !important; margin-bottom: 4px; }
+  .ecm-ocr-compare span { display: block; font-size: 10px !important; line-height: 1.45 !important; color: #33434d !important; word-break: break-word; }
+  .ecm-copy-checklist {
+    margin-top: 8px !important; padding: 7px 8px !important; border-radius: 5px !important;
+    background: rgba(255,193,7,.12) !important; color: #405159 !important; font-size: 11px !important;
+  }
 `;
 
 function buildAnnotatedHtml(mail, annotationsMap, imgAnnotationsMap) {
@@ -3474,6 +3838,7 @@ function renderMultiPreview() {
 // ========================================================================
 function sevLabel(s) { return s === 'err' ? '錯誤' : s === 'warn' ? '警告' : '提示'; }
 function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 </script>
 </body>
 </html>
