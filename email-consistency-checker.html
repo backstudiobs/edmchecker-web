@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.0</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.1</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.0</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.1</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -3441,7 +3441,7 @@ async function runChecks() {
     m.computedMobile  = m.layoutMobile.paras;
     m.computedDesktop = m.layoutDesktop.paras;
   }
-  await runResponsiveImageOcr(mails);
+  // v4.1.1: 已有 M+D 肉眼對比，唔再自動跑 responsive 圖片 OCR（亦省去下載 Tesseract）
   await new Promise(r => setTimeout(r, 30));
 
     const singlePerMail = sorted.map(row => {
@@ -3460,7 +3460,6 @@ async function runChecks() {
         ...checkCouponTerm(row.parsed),
         ...checkBrandSpelling(row.parsed),
         ...checkMoneyFormat(row.parsed),
-        ...checkResponsiveImageSwap(row.parsed),
         ...checkIntraMailIconConsistency(row.parsed),
         ...checkHtmlNoise(row.parsed),
         ...checkApprovedWordCopy(row.parsed, row.tier, state.wordMaster),
