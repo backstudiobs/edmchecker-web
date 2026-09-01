@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.0.0-beta.4（Mirror）</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.0-beta.15（Mirror）</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.0.0-beta.4</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.0-beta.15</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -810,7 +810,9 @@ function buildAlignmentRows(mails) {
     const matched = new Array(ref.length).fill(-1);
     const used = new Set();
     let cursor = 0;
-    const WINDOW = 12, THRESHOLD = 0.55;
+    // v4.1.10: threshold 0.55 → 0.45，減少禮物 bullet 因細微字面差異而錯過 match
+    const WINDOW = 15, THRESHOLD = 0.45;
+    // First pass: greedy forward with sliding window
     for (let i = 0; i < ref.length; i++) {
       const target = ref[i].key;
       let bestJ = -1, bestScore = THRESHOLD;
@@ -821,6 +823,24 @@ function buildAlignmentRows(mails) {
         if (s > bestScore) { bestScore = s; bestJ = j; if (s === 1) break; }
       }
       if (bestJ >= 0) { matched[i] = bestJ; used.add(bestJ); cursor = bestJ + 1; }
+    }
+    // v4.1.8: Second pass — unmatched ref row 用全 list 再搜（唔限 cursor），只要 similarity 夠、位置合理
+    // 呢個 fix Tier 禮物 bullet 因 cursor cascade 而漏 align 嘅問題
+    const SECOND_PASS_THRESHOLD = 0.5;
+    for (let i = 0; i < ref.length; i++) {
+      if (matched[i] >= 0) continue;
+      const target = ref[i].key;
+      let bestJ = -1, bestScore = SECOND_PASS_THRESHOLD;
+      // 位置合理 = 上一個已 match 位置與下一個已 match 位置之間
+      let prevBound = -1, nextBound = list.length;
+      for (let k = i - 1; k >= 0; k--) if (matched[k] >= 0) { prevBound = matched[k]; break; }
+      for (let k = i + 1; k < ref.length; k++) if (matched[k] >= 0) { nextBound = matched[k]; break; }
+      for (let j = prevBound + 1; j < nextBound; j++) {
+        if (used.has(j)) continue;
+        const s = similarity(target, list[j].key);
+        if (s > bestScore) { bestScore = s; bestJ = j; }
+      }
+      if (bestJ >= 0) { matched[i] = bestJ; used.add(bestJ); }
     }
     const unmatchedIdx = [];
     for (let j = 0; j < list.length; j++) if (!used.has(j)) unmatchedIdx.push(j);
@@ -848,7 +868,40 @@ function buildAlignmentRows(mails) {
     }
   });
 
-  const allRows = [...rows, ...tierOnlyRows].sort((a, b) => a.refPos - b.refPos);
+  // v4.1.15: 禮物 bullet 用「位置對齊」取代 fuzzy 對齊。
+  // 唔同 tier 嘅禮物數量／次序／內容都唔同，fuzzy 文字對齊本質上會漏配；
+  // 改為：每 mail 第 N 件禮物擺同一行，保證所有禮物都顯示齊。
+  const isGiftBullet = (p) => {
+    const t = String(p.text || '').trim();
+    if (t.length > 45) return false;                       // 禮物 bullet 短
+    if (/(包括|查看|依照|完成後|請|如您|尚未|訂閱|退出|刊發|查詢)/.test(t)) return false;  // 指示／footer 句
+    return /電子(?:現金|禮)券|e[\s-]?Voucher|Redemption Voucher|里數兌換券|Asia Miles|現金券|兌換券/i.test(t);
+  };
+  const giftIdxSet = lists.map(list => new Set(list.filter(isGiftBullet).map(p => p.index)));
+  const giftByMail = lists.map(list => list.filter(isGiftBullet));
+
+  // 由普通 rows / tierOnlyRows 剝走禮物 cell（避免重複），空咗嘅 row 丟棄
+  const stripGifts = (arr) => arr.map(r => {
+    const cells = r.cells.map((c, mi) => (c && giftIdxSet[mi].has(c.index)) ? null : c);
+    const kind = r.cells.some(Boolean) && !cells.some(Boolean) ? r.kind : classifyRow(cells);
+    return { ...r, cells, kind };
+  }).filter(r => r.cells.some(Boolean));
+  const rowsNoGift = stripGifts(rows);
+  const tierOnlyNoGift = stripGifts(tierOnlyRows);
+
+  // 位置對齊禮物 rows
+  const maxGifts = Math.max(0, ...giftByMail.map(g => g.length));
+  const giftRows = [];
+  for (let g = 0; g < maxGifts; g++) {
+    const cells = new Array(N).fill(null);
+    let posSum = 0, cnt = 0;
+    giftByMail.forEach((gifts, mi) => {
+      if (gifts[g]) { cells[mi] = gifts[g]; posSum += gifts[g].index; cnt++; }
+    });
+    giftRows.push({ cells, refPos: cnt ? posSum / cnt : 0, kind: 'gift' });
+  }
+
+  const allRows = [...rowsNoGift, ...tierOnlyNoGift, ...giftRows].sort((a, b) => a.refPos - b.refPos);
   allRows.forEach((r, i) => r.displayIdx = i + 1);
   return { rows: allRows, lists };
 }
@@ -2034,6 +2087,42 @@ function checkPunctuation(mail) {
 }
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
+// v4.1.13: 檢查段落尾漏標點（保守 heuristic — 避免對 heading／bullet／短標籤誤報）
+// v4.1.14: 支援英文段落
+function checkTrailingPunctuation(mail) {
+  const issues = [];
+  const doc = parseDom(mail.html);
+  extractParagraphs(doc).forEach((p, i) => {
+    if (p.tag && /^(h[1-6]|li)$/i.test(p.tag)) return;  // heading / bullet
+    const t = String(p.text || '').trim();
+    if (t.length < 25) return;
+    if (/\{\{[^}]+\}\}/.test(t)) return;  // template placeholder
+    // v4.1.15: 固定 boilerplate（發行聲明／版權／退訂連結）本身就冇句號，唔 flag
+    if (/刊發|發行|版權|©|保留一切權利|Published by|All rights reserved/i.test(t)) return;
+    if (/取消訂閱|取消所有訂閱|退訂|退出|unsubscribe|opt[\s-]?out|按此|點擊此處|click here/i.test(t)) return;
+    if (/查詢|聯絡我們|contact us|hotline|熱線/i.test(t)) return;
+    // 已經有結尾標點／符號
+    if (/[。？！?!.,，、;；:：」』】〕）\)>\]"'\s]$/.test(t)) return;
+    // 冒號結尾（列點跟後面）— 唔算漏
+    if (/[：:]$/.test(t)) return;
+    // 中文段：語氣詞／pronoun／modal
+    const hasCJK = /[一-鿿]/.test(t);
+    const zhStatement = hasCJK && /(您|我|將|可以|需要|請|會|有|要|應|請於|請按|完成|存入|失效)/.test(t);
+    // 英文段：pronoun／modal／common verb
+    const enStatement = !hasCJK && /\b(you|we|us|your|our|will|should|can|may|please|need|have|has|include|includes|complete|redeem|receive|expire|make|get|check)\b/i.test(t);
+    if (!zhStatement && !enStatement) return;
+    issues.push({
+      severity: 'warn', category: '可能漏標點',
+      message: hasCJK
+        ? `呢段文字睇落係完整句子但結尾冇標點，睇下係咪漏咗「<b>。</b>」`
+        : `Sentence-like paragraph without trailing punctuation — should it end with <b>.</b> / <b>!</b> / <b>?</b>`,
+      snippet: t.length > 100 ? t.slice(0, 100) + '…' : t,
+      paraIndex: i,
+    });
+  });
+  return issues;
+}
+
 // Rule: honorific — must use 您, not 你 (excluding compound word 迷你)
 function checkHonorific(mail) {
   const issues = [];
@@ -2811,7 +2900,10 @@ function checkApprovedWordCopy(mail, tierId, master) {
     if (best.score >= 0.58) {
       issues.push({
         severity: 'warn', category: 'Word文案不一致', paraIndex: best.start,
-        message: `<b>${lang}</b> approved Word 同 Email 文字有差異<div class="ecm-file-list"><div class="ecm-file-card"><span class="ecm-file-label">📘 Word</span><span class="ecm-file-value-text">${escapeHtml(expected)}</span></div><div class="ecm-file-card"><span class="ecm-file-label">📧 Email</span><span class="ecm-file-value-text">${escapeHtml(best.text)}</span></div></div>`,
+        message: (() => {
+          const d = charDiffHtml(expected, best.text);
+          return `<b>${lang}</b> approved Word 同 Email 文字有差異 · <b style="color:#c62828;">${d.summary}</b><div class="ecm-file-list"><div class="ecm-file-card"><span class="ecm-file-label">📘 Word</span><div class="ecm-file-value-text" style="white-space:pre-wrap;">${d.aHtml}</div></div><div class="ecm-file-card"><span class="ecm-file-label">📧 Email</span><div class="ecm-file-value-text" style="white-space:pre-wrap;">${d.bHtml}</div></div></div>`;
+        })(),
       });
     } else {
       issues.push({
@@ -2860,6 +2952,9 @@ const state = {
   filter: 'issues',          // for overview table
   activeTab: 'overview',
   previewMailIdx: 0,
+  previewOverlayIdx: -1,     // v4 beta: onion-skin — 疊上邊封 mail 對比（-1 = 關）
+  previewOverlayOpacity: 0.5,
+  previewSplitMD: false,     // v4.1.6.1: 分欄 mobile+desktop 顯示同一封 mail
   previewWidth: 'full',      // 'full' | '768' | '375'
   multiPreviewWidth: '375',  // clean side-by-side viewport width
   multiCropDesktop: true,    // keep the real viewport, but crop empty sides around desktop EDM content
@@ -2867,6 +2962,8 @@ const state = {
   multiScrollTop: 0,
   multiPreviewOrder: [],     // display-only order of original mail indexes
   lastResult: null,          // populated on runChecks
+  acked: new Set(),          // v4 beta: 已核對 issue signatures
+  aiHumanTexts: new Map(),   // v4.1: AI 圈錯 譯出來嘅一句人話 (issueId → text)
   wordMaster: null,          // optional approved DOCX master; no effect when absent
 };
 
@@ -3218,7 +3315,7 @@ function guessMime(name) {
     ttf:'font/ttf', otf:'font/otf', eot:'application/vnd.ms-fontobject',
   })[ext] || 'application/octet-stream';
 }
-clearBtn.onclick = () => { state.files = []; state.wordMaster = null; state.lastResult = null; state.multiScrollTop = 0; state.multiPreviewOrder = []; renderFiles(); renderWordMasterStatus(); reportContainer.innerHTML = ''; setResultTabsDisabled(true); };
+clearBtn.onclick = () => { state.files = []; state.wordMaster = null; state.lastResult = null; state.multiScrollTop = 0; state.multiPreviewOrder = []; state.acked = new Set(); renderFiles(); renderWordMasterStatus(); reportContainer.innerHTML = ''; setResultTabsDisabled(true); };
 runBtn.onclick = () => runChecks();
 
 async function handleFiles(fileList) {
@@ -3358,6 +3455,7 @@ async function runChecks() {
         ...checkLanguageLink(row.parsed, tier),
         ...checkWhitespace(row.parsed),
         ...checkPunctuation(row.parsed),
+        ...checkTrailingPunctuation(row.parsed),
         ...checkHonorific(row.parsed),
         ...checkCouponTerm(row.parsed),
         ...checkBrandSpelling(row.parsed),
@@ -3479,14 +3577,18 @@ async function runChecks() {
             const thisCell = row.cells[mi];
             let body;
             if (ta.hasClearMajority) {
-              body = `呢段內容同其他 <b>${ta.majority.mails.length}</b> 封MAIL唔一致（已遮走 tier 變數，仍然唔同）：<div class="ecm-file-list">
-                <div class="ecm-file-card" style="background: rgba(76,175,80,.08) !important; border-left: 3px solid #43a047 !important;">
+              // v4 beta: 字元級 diff — 差異位置直接標色，並列出差幾多個乜嘢字元
+              const majT = ta.majority.text.substring(0, 400);
+              const thisT = thisCell.text.substring(0, 400);
+              const diff = charDiffHtml(majT, thisT);
+              body = `呢段同其他 <b>${ta.majority.mails.length}</b> 封MAIL唔一致（已遮走 tier 變數）：<b style="color:#c62828;">${diff.summary}</b><div class="ecm-file-list">
+                <div class="ecm-file-card" style="background:#fff !important; border-left: 3px solid #43a047 !important; border-top:1px solid #e0e6ea !important; border-right:1px solid #e0e6ea !important; border-bottom:1px solid #e0e6ea !important;">
                   <span class="ecm-file-label" style="color: #2e7d32 !important;">✓ 其他 ${ta.majority.mails.length} 封MAIL係</span>
-                  <div class="ecm-file-value-text">${escapeHtml(ta.majority.text.substring(0, 200))}${ta.majority.text.length > 200 ? '…' : ''}</div>
+                  <div class="ecm-file-value-text" style="white-space:pre-wrap; background:transparent !important;">${diff.aHtml}</div>
                 </div>
-                <div class="ecm-file-card" style="background: rgba(229,57,53,.06) !important; border-left: 3px solid #e53935 !important;">
+                <div class="ecm-file-card" style="background:#fff !important; border-left: 3px solid #e53935 !important; border-top:1px solid #e0e6ea !important; border-right:1px solid #e0e6ea !important; border-bottom:1px solid #e0e6ea !important;">
                   <span class="ecm-file-label" style="color: #c62828 !important;">✗ 呢封 (${escapeHtml(tierLabel(mi))}) 係</span>
-                  <div class="ecm-file-value-text">${escapeHtml(thisCell.text.substring(0, 200))}${thisCell.text.length > 200 ? '…' : ''}</div>
+                  <div class="ecm-file-value-text" style="white-space:pre-wrap; background:transparent !important;">${diff.bHtml}</div>
                 </div>
               </div>`;
             } else {
@@ -3618,6 +3720,303 @@ async function runChecks() {
 // ========================================================================
 // RENDER: OVERVIEW
 // ========================================================================
+// ==== v4 beta: G. Azure OpenAI 二次覆核 ====
+const AZURE_CFG_KEY = 'ecmv4.azure';
+function getAzureConfig() {
+  try { return JSON.parse(localStorage.getItem(AZURE_CFG_KEY) || 'null'); } catch (_) { return null; }
+}
+function setAzureConfig(cfg) {
+  try {
+    if (cfg) localStorage.setItem(AZURE_CFG_KEY, JSON.stringify(cfg));
+    else localStorage.removeItem(AZURE_CFG_KEY);
+  } catch (_) {}
+}
+// v4.1: 走 Cloudflare Worker proxy — key 完全喺 Worker 度，用戶只需 Worker URL
+window.openAzureSettings = function() {
+  const cur = getAzureConfig() || {};
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `<div style="background:#fff;border-radius:8px;padding:24px;width:520px;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.3);">
+    <h3 style="margin:0 0 12px 0;">🤖 AI 覆核設定</h3>
+    <div style="font-size:12px;color:#666;margin-bottom:12px;">Tool 透過 Cloudflare Worker proxy 訪問 Azure OpenAI；API key 唔會出現喺 browser。</div>
+    <label style="display:block;margin-bottom:12px;font-size:13px;">Worker URL <span style="color:#c62828;">*</span><br>
+      <input id="azWorkerUrl" type="text" style="width:100%;padding:6px;box-sizing:border-box;" value="${escapeAttr(cur.workerUrl || '')}" placeholder="https://your-worker.xxx.workers.dev"></label>
+    <label style="display:block;margin-bottom:16px;font-size:13px;">Shared token（Worker 度 set 咗就要填，防止外人隨便 call）<br>
+      <input id="azSharedToken" type="password" style="width:100%;padding:6px;box-sizing:border-box;" value="${escapeAttr(cur.sharedToken || '')}" placeholder="可選"></label>
+    <div style="font-size:11px;color:#7a8a94;background:#f6f8fa;padding:8px;border-radius:4px;margin-bottom:16px;">
+      💡 Setup 未做？喺 Cloudflare Dashboard 建立一個免費 Worker，Environment Variables set:<br>
+      • <code>AZURE_ENDPOINT</code>（例 https://xxx.openai.azure.com）<br>
+      • <code>AZURE_DEPLOYMENT</code>（例 gpt-4o）<br>
+      • <code>AZURE_API_KEY</code>（Azure 度嘅 key）<br>
+      • <code>AZURE_API_VERSION</code>（例 2024-08-01-preview，可略）<br>
+      • <code>SHARED_TOKEN</code>（自己諗一串，防外人 abuse，可略）
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button id="azCancel" style="padding:8px 16px;">取消</button>
+      <button id="azClear" style="padding:8px 16px;background:#ffebee;color:#c62828;border:1px solid #ef9a9a;border-radius:4px;">清除</button>
+      <button id="azSave" style="padding:8px 20px;background:#0366d6;color:#fff;border:0;border-radius:4px;font-weight:650;">儲存</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  const close = () => document.body.removeChild(modal);
+  modal.querySelector('#azCancel').onclick = close;
+  modal.querySelector('#azClear').onclick = () => { setAzureConfig(null); close(); if (state.lastResult) renderOverview(); };
+  modal.querySelector('#azSave').onclick = () => {
+    const cfg = {
+      workerUrl: modal.querySelector('#azWorkerUrl').value.trim().replace(/\/$/, ''),
+      sharedToken: modal.querySelector('#azSharedToken').value.trim(),
+    };
+    if (!cfg.workerUrl) { alert('Worker URL 一定要填'); return; }
+    setAzureConfig(cfg);
+    close();
+    if (state.lastResult) renderOverview();
+  };
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+};
+
+// v4.1: 迷你 markdown → HTML renderer（只 handle heading / bold / italic / bullet / paragraph）
+function _mdRender(md) {
+  const lines = String(md || '').split(/\r?\n/);
+  let html = '', inList = false;
+  const inline = (s) => escapeHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/\*(?!\*)([^*]+)\*/g, '<i>$1</i>')
+    .replace(/`([^`]+)`/g, '<code style="background:#f1f3f5;padding:1px 5px;border-radius:3px;font-size:12px;">$1</code>');
+  const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
+  for (let raw of lines) {
+    const line = raw.trim();
+    if (!line) { closeList(); continue; }
+    // heading ####/###/##/#
+    const hMatch = line.match(/^(#{1,4})\s+(.*)$/);
+    if (hMatch) {
+      closeList();
+      const level = Math.min(hMatch[1].length + 2, 5);  // #### → h4 level styling
+      const sizes = { 3: '17px', 4: '15px', 5: '13.5px' };
+      const colors = { 3: '#0366d6', 4: '#405159', 5: '#405159' };
+      html += `<div style="font-size:${sizes[level] || '13px'};font-weight:700;color:${colors[level] || '#405159'};margin:14px 0 6px 0;">${inline(hMatch[2])}</div>`;
+      continue;
+    }
+    // horizontal rule
+    if (/^-{3,}$/.test(line)) { closeList(); html += '<hr style="border:0;border-top:1px solid #e1e6ea;margin:12px 0;">'; continue; }
+    // bullet
+    const bMatch = line.match(/^[-*•]\s+(.*)$/);
+    if (bMatch) {
+      if (!inList) { html += '<ul style="margin:4px 0 8px 0;padding-left:22px;line-height:1.7;">'; inList = true; }
+      html += `<li style="margin:3px 0;">${inline(bMatch[1])}</li>`;
+      continue;
+    }
+    // numbered list — collapse to bullet style too
+    const nMatch = line.match(/^\d+\.\s+(.*)$/);
+    if (nMatch) {
+      if (!inList) { html += '<ul style="margin:4px 0 8px 0;padding-left:22px;line-height:1.7;">'; inList = true; }
+      html += `<li style="margin:3px 0;">${inline(nMatch[1])}</li>`;
+      continue;
+    }
+    // paragraph
+    closeList();
+    html += `<div style="margin:6px 0;line-height:1.7;">${inline(line)}</div>`;
+  }
+  closeList();
+  return html;
+}
+
+// v4.1: 對某封 mail 所有 issue call 一次 AI，攞返每 issue 一句人話，塞入 pin
+window.runAiAnnotate = async function(mailIdx) {
+  const cfg = getAzureConfig();
+  if (!cfg || !cfg.workerUrl) { alert('未設定 AI Worker URL'); return; }
+  const ctx = state.lastResult;
+  if (!ctx) return;
+  const anno = ctx.perMailAnnotations[mailIdx] || new Map();
+  const imgAnno = (ctx.perMailImgAnnotations && ctx.perMailImgAnnotations[mailIdx]) || new Map();
+  const issues = [];
+  [...anno.entries()].sort((a, b) => a[0] - b[0]).forEach(([paraIdx, items]) => {
+    items.forEach(it => issues.push({ pinLoc: `第 ${paraIdx + 1} 段`, id: _issueId(it), title: it.title || '', body: String(it.body || it.message || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400) }));
+  });
+  [...imgAnno.entries()].sort((a, b) => a[0] - b[0]).forEach(([imgIdx, items]) => {
+    items.forEach(it => issues.push({ pinLoc: `第 ${imgIdx + 1} 張圖`, id: _issueId(it), title: it.title || '', body: String(it.body || it.message || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400) }));
+  });
+  if (!issues.length) { alert('呢封 mail 冇 issue 需要 AI 處理'); return; }
+  const btn = document.getElementById('aiAnnotateBtn');
+  const oldLbl = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ AI 處理中… (' + issues.length + ' 項)'; }
+  // v4.1.6: 用 TSV 格式（AI 更容易穩定輸出）取代 JSON
+  const idMap = new Map();  // 短 idx → full issue id
+  issues.forEach((iss, idx) => idMap.set(String(idx + 1), iss.id));
+  const payload = {
+    messages: [
+      { role: 'system', content: '你係 EDM QA 譯員。用戶會畀你一堆 checker issue。你要為每個 issue 生成一句簡單、繁體中文（可加廣東話語氣）嘅人話總結，focus 講清楚「究竟差咗乜」，唔好超過 40 個中文字。\n\n輸出格式（每行一個 issue，用 tab 分開；唔好加任何其他文字、code fence 或 markdown）：\n編號⇥人話總結\n編號⇥人話總結\n...\n\n編號一定要跟 input 個 [N]。' },
+      { role: 'user', content: `以下 ${issues.length} 個 issue（喺 mail「${ctx.fileNames[mailIdx]}」）：\n\n${issues.map((x, i) => `[${i + 1}] 位置: ${x.pinLoc} · 標題: ${x.title}\n內容: ${x.body}`).join('\n\n')}` }
+    ],
+    temperature: 0.2,
+    max_tokens: 2000,
+  };
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (cfg.sharedToken) headers['X-Shared-Token'] = cfg.sharedToken;
+    const r = await fetch(cfg.workerUrl, { method: 'POST', headers, body: JSON.stringify(payload) });
+    if (!r.ok) {
+      const errText = await r.text();
+      console.error('[AI 圈錯] HTTP', r.status, errText);
+      throw new Error('HTTP ' + r.status + '：' + errText.slice(0, 200));
+    }
+    const data = await r.json();
+    let reply = data.choices?.[0]?.message?.content || '';
+    console.log('[AI 圈錯] raw reply:\n', reply);
+    // Parse TSV: [N]\tsummary  OR  N\tsummary  OR  N: summary  OR  N. summary
+    let matched = 0;
+    reply.split(/\r?\n/).forEach(line => {
+      // v4.1.6.1: 接受任何常見 separator（tab / arrow / colon / dash / bar / 全形符號）
+      const m = line.match(/^\s*\[?(\d+)\]?[\s\t:.,。：、→⇥⇒⟶►▶\-—–\|｜]+(.+)$/);
+      if (!m) return;
+      const idx = m[1];
+      const text = m[2].trim().replace(/^["「『]|["」』]$/g, '');
+      const fullId = idMap.get(idx);
+      if (fullId && text) { state.aiHumanTexts.set(fullId, text.slice(0, 200)); matched++; }
+    });
+    if (matched === 0) {
+      // Fallback: try JSON just in case
+      try {
+        const arr = JSON.parse(reply.match(/\[[\s\S]*\]/)?.[0] || reply);
+        if (Array.isArray(arr)) arr.forEach((it, i) => {
+          const id = it.id || idMap.get(String(i + 1));
+          if (id && it.text) { state.aiHumanTexts.set(id, String(it.text).slice(0, 200)); matched++; }
+        });
+      } catch (_) {}
+    }
+    if (matched === 0) {
+      const debugModal = document.createElement('div');
+      debugModal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+      debugModal.innerHTML = `<div style="background:#fff;border-radius:10px;padding:20px;width:640px;max-width:100%;max-height:80vh;overflow:auto;">
+        <h3 style="margin:0 0 10px 0;">⚠️ AI 回應格式無法自動 parse</h3>
+        <div style="font-size:12px;color:#666;margin-bottom:10px;">AI raw reply（可以自己 copy 睇）：</div>
+        <pre style="background:#f6f8fa;padding:12px;border-radius:6px;font-size:11px;white-space:pre-wrap;max-height:400px;overflow:auto;">${escapeHtml(reply)}</pre>
+        <div style="text-align:right;margin-top:10px;"><button onclick="this.closest('div[style*=fixed]').remove()" style="padding:6px 14px;">關閉</button></div>
+      </div>`;
+      document.body.appendChild(debugModal);
+      return;
+    }
+    renderPreview();
+    alert('✓ AI 已幫 ' + matched + ' / ' + issues.length + ' 個 issue 加人話 caption。');
+  } catch (e) {
+    alert('❌ AI 圈錯失敗：' + (e && e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = oldLbl; }
+  }
+};
+
+window.runAzureReview = async function() {
+  const cfg = getAzureConfig();
+  if (!cfg || !cfg.workerUrl) { alert('未設定 AI 覆核 Worker URL'); return; }
+  const ctx = state.lastResult;
+  if (!ctx) return;
+  const tierLabelOf = (i) => (ctx.tiers[i] ? ctx.tiers[i].id : `MAIL#${i+1}`) + ' MAIL';
+  const lines = [];
+  ctx.singlePerMail.forEach((list, mi) => {
+    list.forEach(iss => {
+      const msg = String(iss.message || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      lines.push(`[${tierLabelOf(mi)}] (${iss.severity}) ${iss.category}: ${msg}`);
+    });
+  });
+  const payload = {
+    messages: [
+      { role: 'system', content: '你係一位資深 EDM QA reviewer，用繁體中文（廣東話語氣自然），幫用戶做二次覆核。用戶啱啱用自動 checker 對比咗多封 tier email + Word master。請用 markdown 格式輸出（會 render 成 HTML）：\n\n### 🔴 最需要人手核對（3-5 項）\n每項用「#### N. 標題」開頭，跟住兩粒 bullet：\n- **問題**：一句話解釋差異\n- **點解要 fix**：對讀者／公司嘅具體影響\n\n### 🟡 可能係 false positive（如有）\n同樣 bullet 格式解釋。\n\n### 🔍 checker 可能漏咗嘅角度（最多 2 項）\n每項一句 bullet。\n\n請簡潔，唔好複述 issue 原文，重點係「點解重要」+「點 fix」。' },
+      { role: 'user', content: `Checker 呢次跑出嘅 issues 如下（共 ${lines.length} 項）：\n\n${lines.slice(0, 200).join('\n')}${lines.length > 200 ? `\n\n（後面仲有 ${lines.length - 200} 項未列）` : ''}` }
+    ],
+    temperature: 0.2,
+    max_tokens: 1500,
+  };
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `<div style="background:#fff;border-radius:10px;width:760px;max-width:100%;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.35);">
+    <div style="padding:16px 24px;border-bottom:1px solid #e1e6ea;background:linear-gradient(135deg,#6a1b9a,#3f51b5);color:#fff;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="margin:0;font-size:16px;">🤖 AI 覆核</h3>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:rgba(255,255,255,.2);color:#fff;border:0;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">關閉 ✕</button>
+    </div>
+    <div id="aiOut" style="padding:20px 24px;overflow-y:auto;flex:1;font-size:13.5px;color:#2b3540;">
+      <div style="text-align:center;padding:40px 0;color:#7a8a94;">
+        <div style="font-size:32px;margin-bottom:10px;">⏳</div>
+        正在透過 Worker call Azure OpenAI……
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  const out = modal.querySelector('#aiOut');
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (cfg.sharedToken) headers['X-Shared-Token'] = cfg.sharedToken;
+    const r = await fetch(cfg.workerUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const errText = await r.text();
+      out.innerHTML = `<div style="color:#c62828;">❌ HTTP ${r.status}<br><pre style="white-space:pre-wrap;font-size:11px;background:#fef3f2;padding:8px;border-radius:4px;">${escapeHtml(errText.slice(0, 800))}</pre></div>`;
+      return;
+    }
+    const data = await r.json();
+    const reply = data.choices?.[0]?.message?.content || '(AI 冇 return 內容)';
+    out.innerHTML = `<div class="ai-md">${_mdRender(reply)}</div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #eef2f5;font-size:11px;color:#8a99a3;">
+        Tokens: prompt ${data.usage?.prompt_tokens || '?'} · completion ${data.usage?.completion_tokens || '?'} · total ${data.usage?.total_tokens || '?'} · model ${escapeHtml(data.model || '?')}
+      </div>`;
+  } catch (e) {
+    out.innerHTML = `<div style="color:#c62828;">❌ Network 錯誤：${escapeHtml(String(e && e.message || e))}<br><small>檢查 Worker URL 有無填錯，或者 Worker 有無 handle CORS。</small></div>`;
+  }
+};
+
+// v4 beta: 判斷「係咪需要人手核對嘅真差異」
+function _isCriticalIssue(iss) {
+  if (iss.severity === 'err') return true;
+  if (!iss.category) return false;
+  return /Word文案不一致|Word Tier獎品|標點一致|文字位置|未對齊段落|圖片 bytes 一致|圖片對齊|跨MAIL 圖片次序|清單水平位置|圖片尺寸/.test(iss.category);
+}
+// v4 beta: issue 簽名（比 acknowledge 用）
+function _issueSignature(mailIndex, iss) {
+  const msg = String(iss.message || '').replace(/<[^>]+>/g, '').slice(0, 80);
+  return `${mailIndex}|${iss.category}|${msg}`;
+}
+// v4 beta: 呢個 issue 有無畀人 ack 咗
+function _isAcked(sig) { return state.acked && state.acked.has(sig); }
+// v4 beta: 攞人話 TL;DR sentence 出來
+function _tldrSentence(mailIndex, mailLabel, iss) {
+  const rawMsg = String(iss.message || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+  const cat = iss.category || '問題';
+  // 抽 diff summary（如果有）
+  const summaryMatch = rawMsg.match(/(少咗[^、；]+|多咗[^、；]+|向[右左][^、；]+|同其他[^：]+|唔一致[^：]*)/);
+  const snippet = summaryMatch ? summaryMatch[0] : rawMsg.slice(0, 60) + (rawMsg.length > 60 ? '…' : '');
+  return `<b>${escapeHtml(mailLabel)}</b>：${escapeHtml(cat)} — ${escapeHtml(snippet)}`;
+}
+
+// v4 beta: 全域 ack / unack 函數 for inline onclick
+window.ackIssue = function(sig) {
+  if (!state.acked) state.acked = new Set();
+  state.acked.add(sig);
+  renderOverview();
+};
+window.unackIssue = function(sig) {
+  if (state.acked) state.acked.delete(sig);
+  renderOverview();
+};
+window.ackAllCritical = function() {
+  const ctx = state.lastResult; if (!ctx) return;
+  ctx.singlePerMail.forEach((list, mi) => {
+    list.filter(_isCriticalIssue).forEach(iss => state.acked.add(_issueSignature(mi, iss)));
+  });
+  renderOverview();
+};
+window.jumpToNextUnacked = function() {
+  const nodes = document.querySelectorAll('[data-issue-sig][data-critical="1"]:not(.acked)');
+  for (const n of nodes) {
+    n.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    n.style.transition = 'box-shadow 0.3s';
+    n.style.boxShadow = '0 0 0 3px #ff9800';
+    setTimeout(() => { n.style.boxShadow = ''; }, 1500);
+    return;
+  }
+  alert('✓ 全部真差異已核對完');
+};
+
 function renderOverview() {
   const ctx = state.lastResult;
   if (!ctx) { reportContainer.innerHTML = ''; return; }
@@ -3625,6 +4024,48 @@ function renderOverview() {
   const singleTotal = singlePerMail.reduce((a, l) => a + l.length, 0);
 
   let html = '';
+
+  // v4 beta: 統計未 ack 嘅真差異
+  const tierLabelOf = (i) => (tiers[i] ? tiers[i].id : `MAIL#${i+1}`) + ' MAIL';
+  let critTotal = 0, critAcked = 0;
+  const tldrItems = [];
+  singlePerMail.forEach((list, mi) => {
+    list.forEach(iss => {
+      if (!_isCriticalIssue(iss)) return;
+      const sig = _issueSignature(mi, iss);
+      critTotal++;
+      if (_isAcked(sig)) critAcked++;
+      else tldrItems.push(_tldrSentence(mi, tierLabelOf(mi), iss));
+    });
+  });
+  const critRemain = critTotal - critAcked;
+
+  // v4 beta: sticky action bar — scroll 都見到未處理數
+  const barColor = critRemain > 0 ? '#e53935' : '#43a047';
+  const barIcon = critRemain > 0 ? '⚠️' : '✅';
+  const azCfg = getAzureConfig();
+  html += `<div style="position:sticky;top:0;z-index:100;background:${barColor};color:#fff;padding:10px 16px;margin:-14px -14px 14px -14px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.15);">
+    <div style="font-weight:650;font-size:14px;">${barIcon} 未核對真差異：<b style="font-size:18px;">${critRemain}</b> / ${critTotal} 項 · 已核對 ${critAcked}</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      ${critRemain > 0 ? `<button onclick="jumpToNextUnacked()" style="background:#fff;color:${barColor};border:0;padding:6px 14px;border-radius:4px;font-weight:650;cursor:pointer;">▶ 跳去下一項</button>` : ''}
+      ${critRemain > 0 ? `<button onclick="if(confirm('確定將全部 ${critRemain} 項真差異 mark 已核對？')) ackAllCritical()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.5);padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">全部 mark 已核對</button>` : ''}
+      ${azCfg ? `<button onclick="runAzureReview()" style="background:#6a1b9a;color:#fff;border:0;padding:6px 14px;border-radius:4px;font-weight:650;cursor:pointer;">🤖 AI 覆核</button>` : ''}
+      <button onclick="openAzureSettings()" title="Azure OpenAI 設定" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.4);padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12px;">⚙️ ${azCfg ? 'AI ✓' : 'AI 設定'}</button>
+    </div>
+  </div>`;
+
+  // v4 beta: TL;DR 人話總結
+  if (tldrItems.length > 0) {
+    const shown = tldrItems.slice(0, 12);
+    const more = tldrItems.length - shown.length;
+    html += `<div class="card" style="border-left:4px solid #ff9800;">
+      <h2>📝 TL;DR · 呢次跑到嘅具體差異</h2>
+      <ol style="margin:6px 0 0 0;padding-left:22px;line-height:1.75;font-size:13px;color:#405159;">
+        ${shown.map(s => `<li>${s}</li>`).join('')}
+      </ol>
+      ${more > 0 ? `<div style="margin-top:6px;font-size:12px;color:#7a8a94;">…仲有 <b>${more}</b> 項，見下面詳細清單。</div>` : ''}
+    </div>`;
+  }
 
   if (state.wordMaster) {
     const wordIssues = singlePerMail.flat().filter(issue => /^Word/.test(issue.category));
@@ -3712,7 +4153,17 @@ function renderOverview() {
         html += `<div style="padding:8px 0;color:#43a047;font-size:13px;">✓ 冇發現問題</div>`;
       } else {
         list.forEach(iss => {
-          html += `<div class="issue">
+          // v4 beta: 加 signature + ack button
+          const sig = _issueSignature(i, iss);
+          const critical = _isCriticalIssue(iss);
+          const acked = _isAcked(sig);
+          const ackBtn = critical
+            ? (acked
+              ? `<button onclick="unackIssue('${sig.replace(/'/g,"\\'")}')" style="float:right;background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;">✓ 已核對（撳返 undo）</button>`
+              : `<button onclick="ackIssue('${sig.replace(/'/g,"\\'")}')" style="float:right;background:#fff3e0;color:#e65100;border:1px solid #ffb74d;padding:3px 10px;border-radius:4px;font-size:11px;cursor:pointer;font-weight:650;">✅ 我已核對</button>`)
+            : '';
+          html += `<div class="issue" data-issue-sig="${escapeAttr(sig)}" data-critical="${critical ? 1 : 0}"${acked ? ' style="opacity:.5;background:#f5f5f5;"' : ''}>
+            ${ackBtn}
             <span class="sev ${iss.severity}">${sevLabel(iss.severity)}</span>
             <b>${iss.category}</b> — ${iss.message}
             ${iss.snippet ? `<div class="snip">${escapeHtml(iss.snippet)}</div>` : ''}
@@ -3789,7 +4240,23 @@ function renderAlignTable(rows, fileNames, tiers) {
         const isTextOutlier = r.kind === 'mismatch' && r.textAnalysis && r.textAnalysis.outlierMails.includes(i);
         const outlierBadge = isTextOutlier ? `<div class="outlier-badge">❌ 呢封同其他唔同</div>` : '';
         const majorityBadge = (r.kind === 'mismatch' && r.textAnalysis && r.textAnalysis.hasClearMajority && !isTextOutlier) ? `<div class="majority-badge">✓ 同其他一致</div>` : '';
-        html += `<td class="cell-content"><div class="txt">${highlightTierVars(cell.text)}</div>${outlierBadge}${majorityBadge}${styleWarn}</td>`;
+        // v4.1.12: mismatch row 每 cell 對 majority 做 char-diff，令用戶一眼睇到多／少邊個字元
+        let cellText;
+        if (r.kind === 'mismatch' && r.textAnalysis && r.textAnalysis.hasClearMajority) {
+          const majT = r.textAnalysis.majority.text;
+          if (isTextOutlier) {
+            // v4.1.14: 概覽 cell — 唔用背景色，只將差異字元轉紅色粗體（低干擾但仍搶眼）
+            cellText = charDiffHtml(majT, cell.text).bHtml
+              .replace(/background:#fff4c2;color:#8e5f00;padding:0 2px;margin:0 1px;border-radius:2px;font-weight:700;/g,
+                'background:transparent;color:#c62828;padding:0;font-weight:800;');
+          } else {
+            // 呢 cell 係 majority — 顯示 majority 版本，冇 highlight
+            cellText = highlightTierVars(cell.text);
+          }
+        } else {
+          cellText = highlightTierVars(cell.text);
+        }
+        html += `<td class="cell-content"><div class="txt">${cellText}</div>${outlierBadge}${majorityBadge}${styleWarn}</td>`;
       }
     });
     html += '</tr>';
@@ -3824,13 +4291,43 @@ const ANNOTATION_CSS = `
     box-shadow: 0 2px 6px rgba(0,0,0,.08) !important;
     text-align: left !important; color: #1a2027 !important;
   }
-  .ecm-memo-err  { background: #ffebee !important; border-left: 4px solid #c62828 !important; }
-  .ecm-memo-warn { background: #fff3e0 !important; border-left: 4px solid #e65100 !important; }
+  /* v4.1.7: 外框中性色，只用左邊 border 表示嚴重程度；紅色留番畀真正嘅差異字元 */
+  .ecm-memo-err  { background: #ffffff !important; border-left: 5px solid #c62828 !important; border-top: 1px solid #f5d5d5 !important; border-right: 1px solid #f5d5d5 !important; border-bottom: 1px solid #f5d5d5 !important; }
+  .ecm-memo-warn { background: #ffffff !important; border-left: 5px solid #e65100 !important; border-top: 1px solid #f5dfc4 !important; border-right: 1px solid #f5dfc4 !important; border-bottom: 1px solid #f5dfc4 !important; }
   .ecm-memo-info {
     background: #f5f7fa !important; border-left: 2px solid #b0bec5 !important;
     padding: 6px 10px !important; font-size: 11px !important;
     box-shadow: none !important; opacity: .85 !important;
   }
+  /* v4.1: 大 numbered pin + 一句人話 */
+  .ecm-memo-pin-row { display: flex !important; gap: 12px !important; align-items: flex-start !important; }
+  .ecm-memo-pin {
+    flex: 0 0 auto !important; width: 36px !important; height: 36px !important; border-radius: 50% !important;
+    display: flex !important; align-items: center !important; justify-content: center !important;
+    font-size: 15px !important; font-weight: 800 !important; color: #fff !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,.15) !important; border: 2px solid #fff !important;
+  }
+  .ecm-memo-pin-err  { background: #c62828 !important; }
+  .ecm-memo-pin-warn { background: #e65100 !important; }
+  .ecm-memo-pin-info { background: #607d8b !important; width: 28px !important; height: 28px !important; font-size: 12px !important; }
+  .ecm-memo-content { flex: 1 1 auto !important; min-width: 0 !important; }
+  .ecm-memo-oneliner {
+    font-size: 14px !important; font-weight: 600 !important; color: #1a2027 !important;
+    line-height: 1.55 !important; margin-top: 4px !important;
+  }
+  .ecm-memo-info .ecm-memo-oneliner { font-size: 12px !important; font-weight: 500 !important; }
+  .ecm-memo-detail { margin-top: 8px !important; font-size: 11px !important; }
+  .ecm-memo-detail summary { cursor: pointer !important; color: #6a7a86 !important; font-weight: 500 !important; user-select: none !important; }
+  .ecm-memo-detail > div { margin-top: 6px !important; padding: 8px !important; background: rgba(0,0,0,.04) !important; border-radius: 4px !important; }
+  .ecm-memo-detail-inline { margin-top: 8px !important; font-size: 11.5px !important; }
+  .ecm-memo-anchor {
+    display: flex !important; align-items: flex-start !important; gap: 4px !important;
+    margin-top: 4px !important; padding: 4px 8px !important; border-radius: 4px !important;
+    background: rgba(0,0,0,.04) !important; font-size: 11px !important; color: #6a7a86 !important;
+  }
+  .ecm-memo-anchor span { color: #1a2027 !important; font-weight: 500 !important; word-break: break-word !important; }
+  .ecm-memo-more { margin-top: 8px !important; font-size: 11px !important; }
+  .ecm-memo-more summary { cursor: pointer !important; color: #6a7a86 !important; font-weight: 600 !important; user-select: none !important; }
   .ecm-memo-item { padding: 4px 0 !important; border-top: 1px dashed rgba(0,0,0,.08) !important; }
   .ecm-memo-item:first-child { border-top: 0 !important; }
   .ecm-memo-item .ecm-title {
@@ -3894,39 +4391,108 @@ const ANNOTATION_CSS = `
   }
 `;
 
+// v4.1: 短一句人話 — 由 issue message 抽第一句 / 剥晒 HTML tag 出來，最多 100 字
+function _humanOneLiner(item) {
+  // 優先用 AI 譯咗嘅一句話
+  const aiText = state.aiHumanTexts && state.aiHumanTexts.get(_issueId(item));
+  if (aiText) return aiText;
+  const raw = String(item.body || item.message || '')
+    .replace(/<div[^>]*class="ecm-file-list"[\s\S]*$/, '')  // 剥後面 file card
+    .replace(/<div[^>]*class="ecm-snippet"[\s\S]*$/, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return raw.length > 120 ? raw.slice(0, 118) + '…' : raw;
+}
+// 每 issue 一個穩定 ID，用嚟 map AI text
+function _issueId(item) {
+  return item.__id || (item.__id = (item.title || '') + '::' + String(item.body || item.message || '').slice(0, 60).replace(/<[^>]+>/g, ''));
+}
+
 function buildAnnotatedHtml(mail, annotationsMap, imgAnnotationsMap) {
   const doc = parseDom(mail.html);
   const nodes = Array.from(doc.querySelectorAll(PARA_SELECTOR)).filter(n => textOf(n));
   const highestSeverity = (items) => items.some(x => x.severity === 'err') ? 'err' : items.some(x => x.severity === 'warn') ? 'warn' : 'info';
-  const memoHtml = (items) => items.map(x => `
+
+  // v4.1: 為每粒 pin 順序編號 1, 2, 3...（同 sidebar 對得上）
+  const numberedByPara = new Map(), numberedByImg = new Map();
+  let pinNo = 0;
+  [...annotationsMap.entries()].sort((a, b) => a[0] - b[0]).forEach(([paraIdx]) => { numberedByPara.set(paraIdx, ++pinNo); });
+  if (imgAnnotationsMap) {
+    [...imgAnnotationsMap.entries()].sort((a, b) => a[0] - b[0]).forEach(([imgIdx]) => { numberedByImg.set(imgIdx, ++pinNo); });
+  }
+
+  const memoHtml = (items, pinNumber, sev, anchorSnippet) => {
+    const anchor = anchorSnippet ? `<div class="ecm-memo-anchor">📌 <span>${escapeHtml(anchorSnippet)}</span></div>` : '';
+    // 淨用第一項做 headline 一句人話，其餘變 "詳情" collapsible
+    const first = items[0];
+    const rest = items.slice(1);
+    const one = _humanOneLiner(first);
+    const catBadge = `<span class="ecm-title">${escapeHtml(first.title || first.category || '問題')}</span>`;
+    const restHtml = rest.length ? `<details class="ecm-memo-more"><summary>+ ${rest.length} 個相關問題</summary>${rest.map(x => `
       <div class="ecm-memo-item">
-        <span class="ecm-title">${escapeHtml(x.title)}</span>
-        <div class="ecm-body">${x.body}</div>
-      </div>`).join('');
+        <span class="ecm-title">${escapeHtml(x.title || x.category || '問題')}</span>
+        <div class="ecm-body">${x.body || x.message || ''}</div>
+      </div>`).join('')}</details>` : '';
+    // v4.1.11: 拆做「headline HTML（含粗紅 highlight）」 + 「structured cards」
+    // headline 純句話解釋差異，structured cards 就係視覺對比 — 兩者不重複
+    const bodyHtml = String(first.body || first.message || '');
+    const structStart = bodyHtml.search(/<div\s+class="ecm-(?:file-list|responsive-compare|ocr-compare)"/);
+    let headlineHtml = '', structuredHtml = '';
+    if (structStart > 0) { headlineHtml = bodyHtml.slice(0, structStart).trim(); structuredHtml = bodyHtml.slice(structStart); }
+    else if (structStart === 0) { structuredHtml = bodyHtml; }
+    else { headlineHtml = bodyHtml; }
+    const hasStructuredBody = !!structuredHtml;
+    const detailToggle = hasStructuredBody ? `<div class="ecm-memo-detail-inline">${structuredHtml}</div>` : '';
+    // v4.1.11: 有 headline HTML 就用 headline（含粗紅 highlight，保留解釋句），冇先用 one-liner extraction
+    const summaryHtml = headlineHtml
+      ? `<div class="ecm-memo-oneliner">${headlineHtml}</div>`
+      : `<div class="ecm-memo-oneliner">${escapeHtml(one)}</div>`;
+    return `<div class="ecm-memo-pin-row">
+      <div class="ecm-memo-pin ecm-memo-pin-${sev}">${pinNumber}</div>
+      <div class="ecm-memo-content">
+        ${catBadge}
+        ${anchor}
+        ${summaryHtml}
+        ${detailToggle}
+        ${restHtml}
+      </div>
+    </div>`;
+  };
+
   nodes.forEach((node, i) => {
     const items = annotationsMap.get(i);
     if (!items || items.length === 0) return;
     const sev = highestSeverity(items);
+    const pinNo = numberedByPara.get(i);
     node.setAttribute('data-ecm-issue', sev);
     node.setAttribute('id', 'ecm-para-' + i);
+    node.setAttribute('data-ecm-pin', String(pinNo));
     const memo = doc.createElement('div');
     memo.className = 'ecm-memo ecm-memo-' + sev;
-    memo.innerHTML = memoHtml(items);
+    memo.setAttribute('data-ecm-pin', String(pinNo));
+    const paraText = textOf(node).replace(/\s+/g, ' ').trim();
+    const anchorSnippet = paraText.length > 80 ? paraText.slice(0, 78) + '…' : paraText;
+    memo.innerHTML = memoHtml(items, pinNo, sev, anchorSnippet);
     node.parentNode.insertBefore(memo, node.nextSibling);
   });
-  // Image-anchored memos
   if (imgAnnotationsMap && imgAnnotationsMap.size) {
     const imgs = Array.from(doc.querySelectorAll('img'));
     imgs.forEach((img, di) => {
       const items = imgAnnotationsMap.get(di);
       if (!items || items.length === 0) return;
       const sev = highestSeverity(items);
+      const pinNo = numberedByImg.get(di);
       img.setAttribute('data-ecm-issue', sev);
       img.setAttribute('id', 'ecm-img-' + di);
+      img.setAttribute('data-ecm-pin', String(pinNo));
       const memo = doc.createElement('div');
       memo.className = 'ecm-memo ecm-memo-' + sev;
-      memo.innerHTML = memoHtml(items);
-      // Insert after the image (or its closest block parent if img is inside a tight inline wrapper)
+      memo.setAttribute('data-ecm-pin', String(pinNo));
+      const imgSrc = img.getAttribute('src') || '';
+      const imgAlt = img.getAttribute('alt') || '';
+      const imgLabel = imgAlt || imgSrc.split('/').pop().split('?')[0] || '(圖片)';
+      memo.innerHTML = memoHtml(items, pinNo, sev, '🖼️ ' + imgLabel.slice(0, 60));
       (img.parentNode || doc.body).insertBefore(memo, img.nextSibling);
     });
   }
@@ -4005,10 +4571,32 @@ function renderPreview() {
         <button data-w="768" class="${w==='768'?'active':''}" title="Tablet / 平板">📱 768</button>
         <button data-w="full" class="${w==='full'?'active':''}" title="Desktop / 電腦">💻 Full</button>
       </div>
+      <button id="splitMDBtn" title="同一封 mail 分兩欄睇：左邊 375 mobile、右邊 desktop，方便對比圖片／layout" style="padding:6px 12px;background:${state.previewSplitMD ? '#0366d6' : '#f0f3f5'};color:${state.previewSplitMD ? '#fff' : '#405159'};border:1px solid ${state.previewSplitMD ? '#0366d6' : '#d1d9df'};border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;white-space:nowrap;">🔀 M+D 對比</button>
+      ${getAzureConfig() ? `<button id="aiAnnotateBtn" onclick="runAiAnnotate(${activeIdx})" title="AI 幫呢封 mail 每個 issue 譯做一句人話，直接嵌入 pin" style="padding:6px 12px;background:linear-gradient(135deg,#6a1b9a,#3f51b5);color:#fff;border:0;border-radius:4px;font-weight:650;cursor:pointer;font-size:12px;white-space:nowrap;">🤖 AI 圈錯</button>` : ''}
+      <div style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;">
+        🕶️ 疊影：
+        <select id="overlayPicker" style="font-size:12px;padding:2px 4px;">
+          <option value="-1">關</option>
+          ${fileNames.map((fn, i) => i === activeIdx ? '' : `<option value="${i}"${i === state.previewOverlayIdx ? ' selected' : ''}>${escapeHtml(tiers[i]?.id || `#${i+1}`)}</option>`).join('')}
+        </select>
+        <input type="range" id="overlayOpacity" min="0.1" max="0.9" step="0.05" value="${state.previewOverlayOpacity}" style="width:80px;" title="疊影透明度">
+      </div>
       <div style="white-space:nowrap;">${anno.size + imgAnno.size} 個標註</div>
     </div>
-    <div class="preview-frame-wrap">
-      <iframe class="preview-frame width-${w}" id="previewFrame" sandbox="allow-same-origin"></iframe>
+    <div class="preview-frame-wrap" style="position:relative;">
+      ${state.previewSplitMD
+        ? `<div style="display:grid;grid-template-columns:minmax(768px, 1fr) 375px;gap:12px;height:100%;background:#fafbfc;padding:8px;overflow-x:auto;">
+            <div style="display:flex;flex-direction:column;gap:4px;min-width:0;">
+              <div style="font-size:11px;font-weight:700;color:#405159;text-align:center;padding:4px;background:#fff;border-radius:4px;">💻 Desktop（≥ 768px，自動填滿剩餘寬度）</div>
+              <iframe id="previewFrameDesktop" sandbox="allow-same-origin" style="flex:1;width:100%;min-width:768px;border:0;background:#fff;box-shadow:0 3px 14px rgba(0,57,70,.12);"></iframe>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex:0 0 375px;">
+              <div style="font-size:11px;font-weight:700;color:#405159;text-align:center;padding:4px;background:#fff;border-radius:4px;">📱 Mobile 375</div>
+              <iframe id="previewFrameMobile" sandbox="allow-same-origin" style="flex:1;width:375px;border:0;background:#fff;box-shadow:0 3px 14px rgba(0,57,70,.12);"></iframe>
+            </div>
+          </div>`
+        : `<iframe class="preview-frame width-${w}" id="previewFrame" sandbox="allow-same-origin"></iframe>
+           ${state.previewOverlayIdx >= 0 && state.previewOverlayIdx !== activeIdx ? `<iframe class="preview-frame width-${w}" id="previewOverlayFrame" sandbox="allow-same-origin" style="position:absolute;top:0;left:50%;transform:translateX(-50%);opacity:${state.previewOverlayOpacity};pointer-events:none;mix-blend-mode:multiply;"></iframe>` : ''}`}
     </div>
   </div>`;
 
@@ -4031,10 +4619,65 @@ function renderPreview() {
     };
   });
 
-  // Load iframe
-  const iframe = document.getElementById('previewFrame');
+  // Wire M+D split toggle
+  const splitBtn = document.getElementById('splitMDBtn');
+  if (splitBtn) splitBtn.onclick = () => {
+    state.previewSplitMD = !state.previewSplitMD;
+    renderPreview();
+  };
+
   const annotated = buildAnnotatedHtml(mails[activeIdx], anno, imgAnno);
+
+  // Load iframe(s) — split M+D or single
+  if (state.previewSplitMD) {
+    const mFrame = document.getElementById('previewFrameMobile');
+    const dFrame = document.getElementById('previewFrameDesktop');
+    if (mFrame) mFrame.srcdoc = annotated;
+    if (dFrame) dFrame.srcdoc = annotated;
+    // Sync scroll
+    let syncing = false;
+    const setupSync = (src, dst) => {
+      src.addEventListener('load', () => {
+        try {
+          src.contentWindow.addEventListener('scroll', () => {
+            if (syncing) return;
+            syncing = true;
+            try {
+              const srcDoc = src.contentDocument, dstDoc = dst.contentDocument;
+              if (srcDoc && dstDoc) {
+                const srcH = srcDoc.documentElement.scrollHeight - srcDoc.documentElement.clientHeight;
+                const dstH = dstDoc.documentElement.scrollHeight - dstDoc.documentElement.clientHeight;
+                const ratio = srcH > 0 ? src.contentWindow.scrollY / srcH : 0;
+                dst.contentWindow.scrollTo(0, ratio * dstH);
+              }
+            } catch (_) {}
+            setTimeout(() => { syncing = false; }, 30);
+          });
+        } catch (_) {}
+      }, { once: true });
+    };
+    if (mFrame && dFrame) { setupSync(mFrame, dFrame); setupSync(dFrame, mFrame); }
+    return;  // 分欄模式唔行後面 single-iframe wire
+  }
+  const iframe = document.getElementById('previewFrame');
   iframe.srcdoc = annotated;
+
+  // v4 beta: onion-skin overlay iframe
+  const overlayFrame = document.getElementById('previewOverlayFrame');
+  if (overlayFrame && state.previewOverlayIdx >= 0 && state.previewOverlayIdx !== activeIdx) {
+    overlayFrame.srcdoc = mails[state.previewOverlayIdx].html;
+  }
+  const overlayPicker = document.getElementById('overlayPicker');
+  if (overlayPicker) overlayPicker.onchange = () => {
+    state.previewOverlayIdx = Number(overlayPicker.value);
+    renderPreview();
+  };
+  const overlayOpacity = document.getElementById('overlayOpacity');
+  if (overlayOpacity) overlayOpacity.oninput = () => {
+    state.previewOverlayOpacity = Number(overlayOpacity.value);
+    const of = document.getElementById('previewOverlayFrame');
+    if (of) of.style.opacity = state.previewOverlayOpacity;
+  };
 
   // Wire jump list — need to wait for iframe load
   iframe.addEventListener('load', () => {
@@ -4274,6 +4917,77 @@ function renderMultiPreview() {
 function sevLabel(s) { return s === 'err' ? '錯誤' : s === 'warn' ? '警告' : '提示'; }
 function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+// ==== v4 beta: 字元級 diff highlight ====
+function _lcsDiff(a, b) {
+  a = String(a || ''); b = String(b || '');
+  const m = a.length, n = b.length;
+  // LCS DP — 上限 2000 char 避免大段文字爆 memory
+  if (m > 2000 || n > 2000) {
+    return [['-', a], ['+', b]];
+  }
+  const dp = new Array(m + 1);
+  for (let i = 0; i <= m; i++) dp[i] = new Int32Array(n + 1);
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      if (a[i] === b[j]) dp[i][j] = dp[i+1][j+1] + 1;
+      else dp[i][j] = Math.max(dp[i+1][j], dp[i][j+1]);
+    }
+  }
+  const ops = [];
+  let i = 0, j = 0;
+  while (i < m && j < n) {
+    if (a[i] === b[j]) { ops.push([' ', a[i]]); i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]) { ops.push(['-', a[i]]); i++; }
+    else { ops.push(['+', b[j]]); j++; }
+  }
+  while (i < m) { ops.push(['-', a[i++]]); }
+  while (j < n) { ops.push(['+', b[j++]]); }
+  return ops;
+}
+function _visibleChar(ch) {
+  if (ch === ' ') return '·';
+  if (ch === ' ') return '⎵';  // nbsp
+  if (ch === '\t') return '⇥';
+  if (ch === '\n' || ch === '\r') return '↵';
+  if (ch === '　') return '□';  // 全形空格
+  if (ch === '​') return '∅';  // zero-width
+  return ch;
+}
+function charDiffHtml(a, b) {
+  const ops = _lcsDiff(a, b);
+  let aHtml = '', bHtml = '';
+  const delCss = 'background:#ffe5e5;color:#c62828;padding:0 2px;margin:0 1px;border-radius:2px;font-weight:700;';
+  const addCss = 'background:#fff4c2;color:#8e5f00;padding:0 2px;margin:0 1px;border-radius:2px;font-weight:700;';
+  let delCount = 0, addCount = 0;
+  const delChars = [], addChars = [];
+  for (const [op, ch] of ops) {
+    if (op === ' ') { aHtml += escapeHtml(ch); bHtml += escapeHtml(ch); }
+    else if (op === '-') { aHtml += `<mark style="${delCss}" title="呢個字元只喺呢邊出現">${escapeHtml(_visibleChar(ch))}</mark>`; delCount++; delChars.push(ch); }
+    else { bHtml += `<mark style="${addCss}" title="呢個字元只喺呢邊出現">${escapeHtml(_visibleChar(ch))}</mark>`; addCount++; addChars.push(ch); }
+  }
+  // Build human summary: e.g. 「尾少咗『。』」／「多咗 1 個空格」
+  const summarize = (chars, kind) => {
+    if (!chars.length) return '';
+    const joined = chars.join('');
+    const same = chars.every(c => c === chars[0]);
+    if (same) {
+      const c = chars[0];
+      const name = c === ' ' ? '空格' : c === ' ' ? '&nbsp;' : c === '　' ? '全形空格'
+        : c === '\n' || c === '\r' ? '換行' : c === '\t' ? 'tab' : `『${escapeHtml(c)}』`;
+      return `${kind} ${chars.length} 個 ${name}`;
+    }
+    return `${kind}「${escapeHtml(joined.slice(0, 20))}${joined.length > 20 ? '…' : ''}」`;
+  };
+  const parts = [];
+  if (delCount) parts.push(summarize(delChars, '少咗'));
+  if (addCount) parts.push(summarize(addChars, '多咗'));
+  return {
+    aHtml, bHtml,
+    diffCount: delCount + addCount,
+    summary: parts.join('、') || '完全一樣',
+  };
+}
 </script>
 </body>
 </html>
