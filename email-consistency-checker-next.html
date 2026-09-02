@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.3-beta.1（Mirror）</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.4-beta.1（Mirror）</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.3-beta.1</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.4-beta.1</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -1984,9 +1984,25 @@ function checkLanguageLink(mail, tier) {
     return /_(?:EN|TC)\.html($|[?#])/i.test(href);
   });
   if (langLinks.length === 0) {
+    // v4.1.4: 真實 EDM 個語言 toggle 通常經 click-tracking redirect（例如 go.sunlife.com.hk/...），
+    // URL 唔含 *_EN/TC.html 檔名。改為按 anchor 文字偵測語言 toggle；搵到就降級做提示而唔係 err。
+    const toggle = Array.from(doc.querySelectorAll('a')).find(a => {
+      const txt = (a.textContent || '').replace(/\s+/g, ' ').trim();
+      return /^(EN|TC|ENG|English|中文|繁體|繁体|简体|簡體|繁|简|簡)$/i.test(txt);
+    });
+    if (toggle) {
+      const txt = (toggle.textContent || '').trim();
+      const href = toggle.getAttribute('href') || '';
+      issues.push({
+        severity: 'info', category: '語言連結',
+        message: `偵測到語言 toggle link「<b>${escapeHtml(txt)}</b>」，但個 URL 係 tracking／redirect（唔含 <code>*_EN.html</code>／<code>*_TC.html</code> 檔名），無法自動核對指向嘅 tier／語言 — 請人手確認撳落去去到正確語言版本`,
+        snippet: href, paraIndex: findParaContaining(doc, toggle),
+      });
+      return issues;
+    }
     issues.push({
       severity: 'err', category: '語言連結',
-      message: '搵唔到指向 <code>*_EN.html</code> 或 <code>*_TC.html</code> 嘅語言 toggle link',
+      message: '搵唔到語言 toggle link（<code>*_EN.html</code>／<code>*_TC.html</code> 或 anchor 文字 EN／TC／中文／English）',
       paraIndex: findFirstParaWithText(doc, '在瀏覽器查看') ?? findFirstParaWithText(doc, 'View in browser'),
     });
     return issues;
