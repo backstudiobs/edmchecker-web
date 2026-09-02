@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.4</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.5</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.4</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.5</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -2054,6 +2054,11 @@ function checkWhitespace(mail) {
   const issues = [];
   const doc = parseDom(mail.html);
   extractParagraphs(doc).forEach((p, i) => {
+    // v4.1.5: \u53ea\u6536\u7a84\u300c\u7a31\u8b02 / merge-field \u4f54\u4f4d\u7a7a\u5497\u300d\u9020\u6210\u5605\u9023\u7e8c\u7a7a\u683c\uff08\u4f8b\u5982\u300cHello\u2423\u2423(eMPF ID: N/A )\u300d\uff09\uff0c
+    // \u5176\u4ed6\u4f4d\u7f6e\u5605\u9023\u7e8c\u7a7a\u683c\u7167\u6a23\u8981 flag\u3002
+    const spaceMasked = p.text
+      .replace(/\s*\{\{[^}]*\}\}\s*/g, ' ')                                 // {{...}} \u4f54\u4f4d\u9023\u5169\u908a\u7a7a\u683c \u2192 \u55ae\u7a7a\u683c
+      .replace(/\s{2,}(\((?:eMPF\s*ID|\u7a4d\u91d1\u6613\u865f\u78bc)\s*[:\uff1a])/gi, ' $1');       // \u7a31\u8b02\u7a7a \u2192 ID \u62ec\u865f\u524d\u591a\u7a7a\u683c\u6536\u7a84
     // Chinese normally has no inter-word spaces. Catch even ONE ordinary space,
     // NBSP, full-width space, tab or line break between two Han characters.
     const cjkGapRe = /([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])([\t\n\r \u00a0\u3000]+)(?=([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]))/g;
@@ -2069,7 +2074,7 @@ function checkWhitespace(mail) {
     if (/(?:&nbsp;|\s)+\s*$/.test(p.html.trim()) && /&nbsp;/.test(p.html)) {
       issues.push({ severity: 'warn', category: '多餘空白', message: `段落尾部有多餘 <code>&amp;nbsp;</code>`, snippet: p.text, paraIndex: i });
     }
-    if (!cjkGaps.length && / {2,}/.test(p.text)) {
+    if (!cjkGaps.length && / {2,}/.test(spaceMasked)) {
       issues.push({ severity: 'warn', category: '多餘空白', message: `段落有連續2+空格`, snippet: p.text, paraIndex: i });
     }
     if (/(?:&nbsp;\s*){3,}/i.test(p.html)) {

@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.4-beta.1（Mirror）</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.5-beta.1（Mirror）</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.4-beta.1</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.5-beta.1</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -2054,6 +2054,11 @@ function checkWhitespace(mail) {
   const issues = [];
   const doc = parseDom(mail.html);
   extractParagraphs(doc).forEach((p, i) => {
+    // v4.1.5: 只收窄「稱謂 / merge-field 佔位空咗」造成嘅連續空格（例如「Hello␣␣(eMPF ID: N/A )」），
+    // 其他位置嘅連續空格照樣要 flag。
+    const spaceMasked = p.text
+      .replace(/\s*\{\{[^}]*\}\}\s*/g, ' ')                                 // {{...}} 佔位連兩邊空格 → 單空格
+      .replace(/\s{2,}(\((?:eMPF\s*ID|積金易號碼)\s*[:：])/gi, ' $1');       // 稱謂空 → ID 括號前多空格收窄
     // Chinese normally has no inter-word spaces. Catch even ONE ordinary space,
     // NBSP, full-width space, tab or line break between two Han characters.
     const cjkGapRe = /([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff])([\t\n\r \u00a0\u3000]+)(?=([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]))/g;
@@ -2069,7 +2074,7 @@ function checkWhitespace(mail) {
     if (/(?:&nbsp;|\s)+\s*$/.test(p.html.trim()) && /&nbsp;/.test(p.html)) {
       issues.push({ severity: 'warn', category: '多餘空白', message: `段落尾部有多餘 <code>&amp;nbsp;</code>`, snippet: p.text, paraIndex: i });
     }
-    if (!cjkGaps.length && / {2,}/.test(p.text)) {
+    if (!cjkGaps.length && / {2,}/.test(spaceMasked)) {
       issues.push({ severity: 'warn', category: '多餘空白', message: `段落有連續2+空格`, snippet: p.text, paraIndex: i });
     }
     if (/(?:&nbsp;\s*){3,}/i.test(p.html)) {
