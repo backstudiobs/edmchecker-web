@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.5</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.6</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.5</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.6</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -2116,6 +2116,18 @@ function checkTrailingPunctuation(mail) {
   extractParagraphs(doc).forEach((p, i) => {
     if (p.tag && /^(h[1-6]|li)$/i.test(p.tag)) return;  // heading / bullet
     const t = String(p.text || '').trim();
+    // v4.1.6: 英文稱謂行（Hello/Dear/Hi + eMPF ID）結尾應該有逗號；冇就提示可能漏標點。
+    // （中文「您好，…（積金易號碼：…）」個逗號喺前面、結尾冇逗號屬正常，唔套用。）
+    if (/eMPF\s*ID/i.test(t) && /^(hello|dear|hi)\b/i.test(t)) {
+      if (!/,$/.test(t.replace(/\s+$/, ''))) {
+        issues.push({
+          severity: 'warn', category: '可能漏標點',
+          message: '英文稱謂行結尾可能漏咗逗號 — 一般應該係「…(eMPF ID: …)<b>,</b>」',
+          snippet: t, paraIndex: i,
+        });
+      }
+      return;  // 稱謂行已處理，唔再行下面一般 sentence 檢查
+    }
     if (t.length < 25) return;
     if (/\{\{[^}]+\}\}/.test(t)) return;  // template placeholder
     // v4.1.15: 固定 boilerplate（發行聲明／版權／退訂連結）本身就冇句號，唔 flag
