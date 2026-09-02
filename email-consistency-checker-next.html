@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.1-beta.1（Mirror）</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.2-beta.1（Mirror）</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.1-beta.1</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.2-beta.1</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -3348,7 +3348,19 @@ function addToState(file, parsed, sourceUrl) {
 async function addFromUrl(url) {
   const clean = url.trim();
   if (!clean) return;
-  const attempts = [
+  const attempts = [];
+  // v4.1.2: 若已設定 Cloudflare Worker，優先用佢做 server-side fetch（最穩定、繞過 CORS）
+  const _cfg = getAzureConfig();
+  if (_cfg && _cfg.workerUrl) {
+    attempts.push({ name: 'worker', fetch: async () => {
+      const headers = { 'Content-Type': 'application/json' };
+      if (_cfg.sharedToken) headers['X-Shared-Token'] = _cfg.sharedToken;
+      const r = await fetch(_cfg.workerUrl, { method: 'POST', headers, body: JSON.stringify({ fetchUrl: clean }) });
+      const j = await r.json();
+      return { ok: !!(j && j.contents), text: async () => j.contents };
+    }});
+  }
+  attempts.push(
     { name: 'direct', fetch: () => fetch(clean, { redirect: 'follow' }) },
     { name: 'corsproxy.io', fetch: () => fetch('https://corsproxy.io/?' + encodeURIComponent(clean)) },
     { name: 'allorigins', fetch: async () => {
@@ -3356,7 +3368,7 @@ async function addFromUrl(url) {
       const json = await r.json();
       return { ok: !!json.contents, text: async () => json.contents };
     }},
-  ];
+  );
   let html = null, lastErr = null;
   for (const a of attempts) {
     try {
@@ -3367,7 +3379,12 @@ async function addFromUrl(url) {
     } catch (e) { lastErr = e; }
   }
   if (!html) {
-    alert('無法fetch URL — 可能係 CORS 或 network 問題。\n\n可以改為：\n1. 喺 browser 打開個網頁，view-source（Cmd+Option+U）→ Save Page As → drag入嚟\n2. 或者直接下載 .eml / .html file');
+    const hasWorker = _cfg && _cfg.workerUrl;
+    alert('無法fetch URL — 可能係 CORS 或 network 問題。\n\n' +
+      (hasWorker
+        ? '你已設定 Worker，但都 fetch 唔到 — 可能 Worker 未更新到支援 URL fetch，或者個網址擋咗 server 訪問。\n\n'
+        : '💡 設定咗 AI Worker 之後，URL fetch 會自動經 Worker（最穩定）。\n\n') +
+      '可以改為：\n1. 喺 browser 打開個網頁，view-source（Cmd+Option+U）→ Save Page As → drag入嚟\n2. 或者直接下載 .eml / .html file');
     return;
   }
   // Extract filename from URL path
