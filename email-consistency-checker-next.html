@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.2-beta.1（Mirror）</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.3-beta.1（Mirror）</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.2-beta.1</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.3-beta.1</span> <span class="version" style="background:#ff9800;color:#fff;">🧪 Mirror</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -4935,30 +4935,35 @@ function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '
 function escapeAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 // ==== v4 beta: 字元級 diff highlight ====
+// v4.1.3: token 化 — latin 詞（含數字／內部 . , ' -）當一個 token，其他（CJK、標點、空格）逐個字元。
+// 令英文用 word-level diff（唔會出現「redeem vs complete your…」淨 highlight『d』咁怪），中文仍係字元級。
+function _tokenize(s) {
+  return String(s || '').match(/[A-Za-z0-9]+(?:[.'’\-][A-Za-z0-9]+)*|[\s\S]/g) || [];
+}
 function _lcsDiff(a, b) {
-  a = String(a || ''); b = String(b || '');
-  const m = a.length, n = b.length;
-  // LCS DP — 上限 2000 char 避免大段文字爆 memory
-  if (m > 2000 || n > 2000) {
-    return [['-', a], ['+', b]];
+  const A = _tokenize(a), B = _tokenize(b);
+  const m = A.length, n = B.length;
+  // 上限 3000 token 避免大段文字爆 memory
+  if (m > 3000 || n > 3000) {
+    return [['-', String(a || '')], ['+', String(b || '')]];
   }
   const dp = new Array(m + 1);
   for (let i = 0; i <= m; i++) dp[i] = new Int32Array(n + 1);
   for (let i = m - 1; i >= 0; i--) {
     for (let j = n - 1; j >= 0; j--) {
-      if (a[i] === b[j]) dp[i][j] = dp[i+1][j+1] + 1;
+      if (A[i] === B[j]) dp[i][j] = dp[i+1][j+1] + 1;
       else dp[i][j] = Math.max(dp[i+1][j], dp[i][j+1]);
     }
   }
   const ops = [];
   let i = 0, j = 0;
   while (i < m && j < n) {
-    if (a[i] === b[j]) { ops.push([' ', a[i]]); i++; j++; }
-    else if (dp[i+1][j] >= dp[i][j+1]) { ops.push(['-', a[i]]); i++; }
-    else { ops.push(['+', b[j]]); j++; }
+    if (A[i] === B[j]) { ops.push([' ', A[i]]); i++; j++; }
+    else if (dp[i+1][j] >= dp[i][j+1]) { ops.push(['-', A[i]]); i++; }
+    else { ops.push(['+', B[j]]); j++; }
   }
-  while (i < m) { ops.push(['-', a[i++]]); }
-  while (j < n) { ops.push(['+', b[j++]]); }
+  while (i < m) { ops.push(['-', A[i++]]); }
+  while (j < n) { ops.push(['+', B[j++]]); }
   return ops;
 }
 function _visibleChar(ch) {
@@ -4977,23 +4982,25 @@ function charDiffHtml(a, b) {
   const addCss = 'background:#fff4c2;color:#8e5f00;padding:0 2px;margin:0 1px;border-radius:2px;font-weight:700;';
   let delCount = 0, addCount = 0;
   const delChars = [], addChars = [];
+  const showTok = (t) => t.length === 1 ? escapeHtml(_visibleChar(t)) : escapeHtml(t);
   for (const [op, ch] of ops) {
     if (op === ' ') { aHtml += escapeHtml(ch); bHtml += escapeHtml(ch); }
-    else if (op === '-') { aHtml += `<mark style="${delCss}" title="呢個字元只喺呢邊出現">${escapeHtml(_visibleChar(ch))}</mark>`; delCount++; delChars.push(ch); }
-    else { bHtml += `<mark style="${addCss}" title="呢個字元只喺呢邊出現">${escapeHtml(_visibleChar(ch))}</mark>`; addCount++; addChars.push(ch); }
+    else if (op === '-') { aHtml += `<mark style="${delCss}" title="呢部分只喺呢邊出現">${showTok(ch)}</mark>`; delCount++; delChars.push(ch); }
+    else { bHtml += `<mark style="${addCss}" title="呢部分只喺呢邊出現">${showTok(ch)}</mark>`; addCount++; addChars.push(ch); }
   }
   // Build human summary: e.g. 「尾少咗『。』」／「多咗 1 個空格」
   const summarize = (chars, kind) => {
     if (!chars.length) return '';
-    const joined = chars.join('');
     const same = chars.every(c => c === chars[0]);
-    if (same) {
+    if (same && chars[0].length === 1) {
       const c = chars[0];
       const name = c === ' ' ? '空格' : c === ' ' ? '&nbsp;' : c === '　' ? '全形空格'
         : c === '\n' || c === '\r' ? '換行' : c === '\t' ? 'tab' : `『${escapeHtml(c)}』`;
       return `${kind} ${chars.length} 個 ${name}`;
     }
-    return `${kind}「${escapeHtml(joined.slice(0, 20))}${joined.length > 20 ? '…' : ''}」`;
+    const hasWord = chars.some(t => t.length > 1 || /[A-Za-z0-9]/.test(t));
+    const joined = (hasWord ? chars.join(' ').replace(/\s+/g, ' ') : chars.join('')).trim();
+    return `${kind}「${escapeHtml(joined.slice(0, 30))}${joined.length > 30 ? '…' : ''}」`;
   };
   const parts = [];
   if (delCount) parts.push(summarize(delChars, '少咗'));
