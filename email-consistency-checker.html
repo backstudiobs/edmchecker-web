@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.6</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.7</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.6</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.7</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -535,7 +535,7 @@
         <ul>
           <li><b>Approved Word（可選）：</b>上載 <code>.docx</code> 後，自動讀 TC／EN EDM 文案表；有 TC／EN 表頭會直接使用，無表頭時會按中英文內容自動辨認欄位。Word 有 Enrolled／Not Enrolled 區塊時，會按檔名 <code>_E_</code>／<code>_NE_</code> 自動揀相應文案。Tier 獎品表支援 TC／EN 雙語欄，亦支援 <code>Tier 3-4 | Petits Fours | $92</code> 類單一產品名格式；Petits Fours／Palmier 會對應中英文正式名稱。<code>(Button)</code>、<code>Gift box image</code>、<code>(Based on related tier)</code> 及 alternative 行尾 <code>/</code> 視為製作註記。無 Word 時會顯示禮物不同，但不會假定邊款屬於正確 Tier。</li>
           <li><b>語言連結：</b>右上角「EN/繁體」link 指向嘅 <code>*_T{tier}_*_(EN|TC).html</code>，check 有無對應到你揀嘅 tier；支援單 Tier（T1…T6）同組合 Tier（例如 T1-2／T2-4／T5-6）</li>
-          <li><b>多餘空白：</b>中文字之間嘅單一／連續空格（包括 <code>&amp;nbsp;</code>、全形空格）、句末 <code>&amp;nbsp;</code>、連續2+空格</li>
+          <li><b>多餘空白：</b>中文字之間嘅單一／連續空格（包括 <code>&amp;nbsp;</code>、全形空格）、句末 <code>&amp;nbsp;</code>、連續2+空格。指定 Salutation／Last Name／masked_empf_ID 系統稱呼格式嘅連續空格豁免；其他正文仍檢查。</li>
           <li><b>標點：</b>中文段落用咗半形標點（,.!?()）、成對符號未閉合（「」『』（））</li>
           <li><b>稱謂：</b>Chinese段落必須用「<code>您</code>」（避免用「<code>你</code>」）</li>
           <li><b>術語：</b>Coupon統一用「<code>電子現金券</code>」；完整禮品正名「<code>法式焦糖燉蛋電子禮券</code>」、「<code>戚風小蛋糕電子禮券</code>」、「<code>原個戚風大蛋糕電子禮券</code>」、「<code>agnès b. 蝴蝶酥禮盒（15件）電子禮券</code>」、「<code>agnès b. 迷你法式水果撻（6件）電子禮券</code>」除外。但同一正名前面有 HK$／$價錢時，仍須改用「電子現金券」。</li>
@@ -573,7 +573,7 @@
           <li><b>圖片對齊（置左/中/右）跨MAIL</b>：用 bounding-box 量度每張圖喺容器內嘅水平位置，喺 Mobile + Desktop 兩個viewport分別check。majority vote：某封MAIL圖片置中但其他置左 → flag</li>
           <li><b>內容 Icon 方向一致性（單封MAIL）⭐</b>：比較同一內容組內各 icon 嘅方向；<b>全部置左或全部置中都視為正常</b>，只有混合方向先警告。Banner / hero / CTA（闊圖）同頂部 logo 自動排除。</li>
           <li><b>圖片定位 debug</b>：像素差只保留喺收合 debug 表，方便技術驗證量度；一般 QA 提示只列出每張 icon 嘅方向，唔顯示像素。</li>
-          <li><b>Bullet／編號清單位置：</b>比較相同標題下面整個 <code>&lt;ul&gt;</code>／<code>&lt;ol&gt;</code> 嘅實際水平起點；即使各項都係 <code>text-align:left</code>，外層 padding／margin 令整組向左／右偏移仍會提示。Mobile 375 及 Desktop 1200 分開判斷，Tier 禮物文字及項目數量可以不同。</li>
+          <li><b>Bullet／編號清單位置：</b>比較相同標題下面整個 <code>&lt;ul&gt;</code>／<code>&lt;ol&gt;</code> 嘅實際水平起點；即使各項都係 <code>text-align:left</code>，外層 padding／margin 令整組向左／右偏移仍會提示。亦比較標題底部到第一項嘅垂直間距，差超過 3px 時提示；唔直接比整頁 Y 座標。Mobile 375 及 Desktop 1200 分開判斷，Tier 禮物文字及項目數量可以不同。</li>
           <li>用途：搵mobile版icon shift、被template漏走嘅圖、圖片size mismatch、圖片排位錯亂、圖片對齊唔一致</li>
         </ul>
         <h3>Viewport 切換</h3>
@@ -1079,6 +1079,7 @@ async function computeParagraphStyles(mail, viewportWidth) {
           // not a <p>/<h*>. Walk visible text nodes so anchors such as
           // "Mission reward (Pick 1 out of 4):" are captured correctly.
           let anchorText = '';
+          let anchorBottom = null;
           const walker = doc.createTreeWalker(doc.body || doc.documentElement, win.NodeFilter.SHOW_TEXT);
           let textNode;
           while ((textNode = walker.nextNode())) {
@@ -1093,6 +1094,7 @@ async function computeParagraphStyles(mail, viewportWidth) {
             const textRect = textRange.getBoundingClientRect();
             if (!textRect.width || !textRect.height) continue;
             anchorText = value;
+            anchorBottom = textRect.bottom;
           }
           return {
             listIndex,
@@ -1101,6 +1103,9 @@ async function computeParagraphStyles(mail, viewportWidth) {
             left: itemRect.left,
             anchor: maskTierVariables(anchorText),
             anchorText,
+            // Local gap, not absolute page Y: preceding copy can legitimately wrap differently.
+            gapAbove: anchorBottom !== null && itemRect.top >= anchorBottom
+              ? Math.round(itemRect.top - anchorBottom) : null,
             itemCount: directItems.length,
             firstText: (firstItem.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
             firstParaIndex: paraNodes.indexOf(firstItem),
@@ -1655,6 +1660,46 @@ function crossImagePositionIssues(mails, tierLabelOf) {
 // Cross-mail list indentation / horizontal-position check.
 // This intentionally compares the first visible item's rendered X position, not text-align:
 // wrapper padding or negative margins can shift a whole bullet list while CSS still says left.
+function crossListGapIssues(mails, tierLabelOf) {
+  const issues = mails.map(() => []);
+  for (const [key, label] of [['layoutMobile', '手機版'], ['layoutDesktop', '電腦版']]) {
+    const groups = new Map();
+    mails.forEach((mail, mi) => {
+      const lists = (mail[key]?.lists || []).filter(l => l.visible && l.anchor);
+      lists.forEach(list => {
+        // Ambiguous repeated headings must not be paired arbitrarily.
+        if (lists.filter(l => l.anchor === list.anchor).length !== 1 || !Number.isFinite(list.gapAbove)) return;
+        const groupKey = `${list.tag}:${list.anchor}`;
+        if (!groups.has(groupKey)) groups.set(groupKey, []);
+        groups.get(groupKey).push({ mi, list });
+      });
+    });
+    groups.forEach(entries => {
+      if (entries.length < 2) return;
+      const sorted = [...entries].sort((a, b) => a.list.gapAbove - b.list.gapAbove);
+      // Cluster within 2px for font rasterization/rounding, requiring a strict majority.
+      let majority = [];
+      sorted.forEach(entry => {
+        const cluster = sorted.filter(e => e.list.gapAbove >= entry.list.gapAbove && e.list.gapAbove <= entry.list.gapAbove + 2);
+        if (cluster.length > majority.length) majority = cluster;
+      });
+      const baseline = majority.length > entries.length / 2 ? majority : null;
+      entries.forEach(entry => {
+        if (baseline?.includes(entry)) return;
+        const others = baseline || entries.filter(e => e !== entry);
+        const reference = others.reduce((sum, e) => sum + e.list.gapAbove, 0) / others.length;
+        const delta = Math.round(entry.list.gapAbove - reference);
+        if (Math.abs(delta) <= 3) return;
+        issues[entry.mi].push({
+          severity: 'warn', category: '清單上下間距', paraIndex: entry.list.firstParaIndex,
+          message: `${label}：「${escapeHtml(entry.list.anchorText)}」與清單之間${baseline ? '' : '（無多數基準，請核對）'}，比 ${escapeHtml(others.map(e => tierLabelOf(e.mi)).join('、'))} ${delta > 0 ? '多' : '少'}咗 <b>${Math.abs(delta)}px</b> 空位，清單相對標題向${delta > 0 ? '下' : '上'}移。請檢查標題及清單容器嘅 padding／margin。`,
+        });
+      });
+    });
+  }
+  return issues;
+}
+
 function crossListPositionIssues(mails, tierLabelOf) {
   const perMail = mails.map(() => []);
   const pendingByMail = mails.map(() => new Map());
@@ -2057,6 +2102,8 @@ function checkWhitespace(mail) {
     // v4.1.5: \u53ea\u6536\u7a84\u300c\u7a31\u8b02 / merge-field \u4f54\u4f4d\u7a7a\u5497\u300d\u9020\u6210\u5605\u9023\u7e8c\u7a7a\u683c\uff08\u4f8b\u5982\u300cHello\u2423\u2423(eMPF ID: N/A )\u300d\uff09\uff0c
     // \u5176\u4ed6\u4f4d\u7f6e\u5605\u9023\u7e8c\u7a7a\u683c\u7167\u6a23\u8981 flag\u3002
     const spaceMasked = p.text
+      // Only this known system greeting is exempt; any following body copy is still checked.
+      .replace(/^(?:(?:您好[，,]|Hello)\s*)?\{\{lead\.Salutation\}\}\s*\{\{lead\.Last Name\}\}\s*[（(]\s*(?:積金易號碼|eMPF\s+ID)\s*[:：]\s*\{\{my\.masked_empf_ID\}\}\s*[）)]/i, 'SYSTEM_GREETING')
       .replace(/\s*\{\{[^}]*\}\}\s*/g, ' ')                                 // {{...}} \u4f54\u4f4d\u9023\u5169\u908a\u7a7a\u683c \u2192 \u55ae\u7a7a\u683c
       .replace(/\s{2,}(\((?:eMPF\s*ID|\u7a4d\u91d1\u6613\u865f\u78bc)\s*[:\uff1a])/gi, ' $1');       // \u7a31\u8b02\u7a7a \u2192 ID \u62ec\u865f\u524d\u591a\u7a7a\u683c\u6536\u7a84
     // Chinese normally has no inter-word spaces. Catch even ONE ordinary space,
@@ -3526,6 +3573,7 @@ async function runChecks() {
     imgAlignPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
     const listPositionPerMail = mails.length >= 2 ? crossListPositionIssues(mails, tierLabelOf) : mails.map(() => []);
     listPositionPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+    crossListGapIssues(mails, tierLabelOf).forEach((list, mi) => { singlePerMail[mi].push(...list); });
 
     const alignment = mails.length >= 2 ? buildAlignmentRows(mails) : { rows: [], lists: [] };
     const rows = alignment.rows;
