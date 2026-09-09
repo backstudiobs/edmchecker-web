@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.9</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.10</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.9</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.10</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -2406,6 +2406,33 @@ function findEmptyAnchor(doc, hrefPattern) {
 }
 function bodyText(doc) { return doc.body ? (doc.body.textContent || '').replace(/\s+/g, ' ') : ''; }
 
+// Marketo 會在寄出 EML 時將原本 unsubscribe 頁面 URL 轉成 go.sunlife.com.hk tracking link。
+// 因此同時以原始 href 及可見連結文字／所在句子判斷，避免已寄出 EML 被誤報。
+function findUnsubscribeLinks(doc) {
+  const anchors = Array.from(doc.querySelectorAll('a')).filter(a => {
+    const href = (a.getAttribute('href') || '').trim();
+    return (textOf(a).length > 0 || a.querySelector('img')) &&
+      href.length > 0 && !/^(?:#|javascript:|about:blank)/i.test(href);
+  });
+  const optOutHref = /LoyaltyProgramUnsubscribeProgram_WPUnsubscribeProgram(?:EN|TC)\.html/i;
+  const allHref = /WP-Unsubscribe-(?:EN|TC)\.html/i;
+  const optOutLinks = anchors.filter(a => {
+    const href = a.getAttribute('href') || '';
+    if (optOutHref.test(href)) return true;
+    const label = textOf(a).replace(/\s+/g, ' ').trim();
+    const container = a.closest('p,li,td,div') || a;
+    const context = textOf(container).replace(/\s+/g, ' ').trim();
+    return /^(?:click here|點擊此處|按此)$/i.test(label) &&
+      /(?:to\s+opt[\s-]?out|退出|退訂|不希望.{0,40}(?:電郵|郵件))/i.test(context);
+  });
+  const allLinks = anchors.filter(a => {
+    const href = a.getAttribute('href') || '';
+    if (allHref.test(href)) return true;
+    return /^(?:unsubscribe all|取消所有訂閱)$/i.test(textOf(a).replace(/\s+/g, ' ').trim());
+  });
+  return {optOutLinks, allLinks};
+}
+
 // EDM (email version) should have these
 function checkEmailRequirements(mail) {
   const issues = [];
@@ -2448,8 +2475,7 @@ function checkEmailRequirements(mail) {
   }
 
   // 3. Unsubscribe — must have VISIBLE anchors
-  const optOutLinks = findVisibleAnchor(doc, /LoyaltyProgramUnsubscribeProgram_WPUnsubscribeProgram(?:EN|TC)\.html/i);
-  const allLinks = findVisibleAnchor(doc, /WP-Unsubscribe-(?:EN|TC)\.html/i);
+  const {optOutLinks, allLinks} = findUnsubscribeLinks(doc);
   const missing = [];
   if (optOutLinks.length === 0) missing.push('「點擊此處退出 / click here to opt out」');
   if (allLinks.length === 0) missing.push('「取消所有訂閱 / Unsubscribe all」');
@@ -2483,7 +2509,8 @@ function checkWebRequirements(mail) {
   }
 
   // Unsubscribe — only flag VISIBLE anchors
-  const unsubVisible = findVisibleAnchor(doc, /LoyaltyProgramUnsubscribeProgram|WP-Unsubscribe-/i);
+  const resolvedUnsubscribe = findUnsubscribeLinks(doc);
+  const unsubVisible = [...new Set([...resolvedUnsubscribe.optOutLinks, ...resolvedUnsubscribe.allLinks])];
   const unsubEmpty  = findEmptyAnchor(doc, /LoyaltyProgramUnsubscribeProgram|WP-Unsubscribe-/i);
   if (unsubVisible.length > 0) {
     bad.push(`可見退訂連結 (${unsubVisible.length}個)`);
