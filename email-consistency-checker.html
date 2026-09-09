@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>SUN仔 EDM及 Website 小助手 v4.1.7</title>
+<title>SUN仔 EDM及 Website 小助手 v4.1.9</title>
 <style>
   /* ==================== BASE ==================== */
   * { box-sizing: border-box; }
@@ -462,7 +462,7 @@
     <div class="brand-lockup">
       <span class="brand-sun" aria-hidden="true">☀</span>
       <div class="brand-copy">
-        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.7</span></h1>
+        <h1>SUN仔 EDM及 Website 小助手 <span class="version">v4.1.9</span></h1>
         <div class="brand-kicker">Sun Life Campaign Quality Workspace</div>
       </div>
     </div>
@@ -1037,14 +1037,22 @@ async function computeParagraphStyles(mail, viewportWidth) {
               const n = scopedNodes[k];
               const rng = doc.createRange(); rng.selectNodeContents(n);
               const tr = rng.getBoundingClientRect();
+              const nextCs = win.getComputedStyle(n);
+              if (!tr.width || !tr.height || nextCs.display === 'none' || nextCs.visibility === 'hidden') continue;
               // A heading containing an inline <span>/<strong> plus trailing whitespace can
               // produce multiple Range rects even when it is visually one line. The strict
               // cross-mail geometry helper intentionally skips that case, so fall back to
               // the actually-computed text-align for this image-to-content rule.
-              const cssTextAlignRaw = (win.getComputedStyle(n).textAlign || '').toLowerCase();
+              const cssTextAlignRaw = (nextCs.textAlign || '').toLowerCase();
               const cssTextAlign = cssTextAlignRaw === 'start' ? 'left' : (cssTextAlignRaw === 'end' ? 'right' : cssTextAlignRaw);
               const visualTextAlign = classifyVisualAlign(win, doc, n);
-              nextText = { left: tr.left, align: visualTextAlign || cssTextAlign, text: (n.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40) };
+              nextText = {
+                left: tr.left,
+                top: tr.top,
+                align: visualTextAlign || cssTextAlign,
+                text: (n.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+                paraIndex: paraNodes.indexOf(n),
+              };
               break;
             }
           }
@@ -1056,7 +1064,12 @@ async function computeParagraphStyles(mail, viewportWidth) {
             visible: ir.width > 0 && ir.height > 0 && imgCs.display !== 'none' && imgCs.visibility !== 'hidden',
             align: classifyImageAlign(win, doc, img),
             left: ir.left, width: ir.width, widthRatio,
-            nextText, prevHasText, groupKey,
+            nextText,
+            // Measure the local whitespace after the image, not an absolute page Y.
+            // This catches one card being pushed up/down by different image-cell padding
+            // without blaming legitimate wrapping earlier in the email.
+            gapBelow: nextText ? Math.round(nextText.top - ir.bottom) : null,
+            prevHasText, groupKey,
           };
         });
         // List-block geometry is measured separately from each <li>'s text-align.
@@ -1700,6 +1713,75 @@ function crossListGapIssues(mails, tierLabelOf) {
   return issues;
 }
 
+// Compare the local space between a visible image and its next text block across MAILs.
+// The image can be followed by Tier-specific reward copy, so match those as one GIFT role.
+// Mobile/Desktop results for the same block are merged into one human-readable warning.
+function crossImageGapIssues(mails, tierLabelOf) {
+  const perMail = mails.map(() => []);
+  const pendingByMail = mails.map(() => new Map());
+  const viewports = [
+    ['layoutMobile', '📱 Mobile 375'],
+    ['layoutDesktop', '💻 Desktop 1200'],
+  ];
+  viewports.forEach(([layoutKey, viewportLabel]) => {
+    const groups = new Map();
+    mails.forEach((mail, mi) => {
+      const images = (mail[layoutKey]?.images || []).filter(im =>
+        im.visible && im.nextText && Number.isFinite(im.gapBelow)
+      );
+      images.forEach(im => {
+        const imageKey = im.id && im.id !== '(inline)' ? im.id : `image-${im.domIndex}`;
+        const nextRole = isGiftItem(im.nextText.text) ? 'GIFT' : maskTierVariables(im.nextText.text);
+        const groupKey = `${imageKey}:${nextRole}`;
+        if (!groups.has(groupKey)) groups.set(groupKey, []);
+        groups.get(groupKey).push({ mi, im });
+      });
+    });
+    groups.forEach(entries => {
+      if (entries.length < 2) return;
+      const sorted = [...entries].sort((a, b) => a.im.gapBelow - b.im.gapBelow);
+      let majority = [];
+      sorted.forEach(entry => {
+        const cluster = sorted.filter(other =>
+          other.im.gapBelow >= entry.im.gapBelow && other.im.gapBelow <= entry.im.gapBelow + 2
+        );
+        if (cluster.length > majority.length) majority = cluster;
+      });
+      const baseline = majority.length > entries.length / 2 ? majority : null;
+      entries.forEach(entry => {
+        if (baseline?.includes(entry)) return;
+        const others = baseline || entries.filter(other => other !== entry);
+        const reference = others.reduce((sum, other) => sum + other.im.gapBelow, 0) / others.length;
+        const delta = Math.round(entry.im.gapBelow - reference);
+        if (Math.abs(delta) <= 3) return;
+        const pendingKey = `${entry.im.domIndex}:${entry.im.nextText.paraIndex}`;
+        if (!pendingByMail[entry.mi].has(pendingKey)) {
+          pendingByMail[entry.mi].set(pendingKey, { im: entry.im, viewports: [] });
+        }
+        pendingByMail[entry.mi].get(pendingKey).viewports.push({
+          viewportLabel,
+          delta,
+          noMajority: !baseline,
+          others: others.map(other => tierLabelOf(other.mi)),
+        });
+      });
+    });
+  });
+  pendingByMail.forEach((pending, mi) => {
+    pending.forEach(({ im, viewports: views }) => {
+      const details = views.map(view =>
+        `<b>${escapeHtml(view.viewportLabel)}</b>：比 ${escapeHtml(view.others.join('、'))} ${view.delta > 0 ? '多' : '少'}咗 <b>${Math.abs(view.delta)}px</b> 空位${view.noMajority ? '（無多數基準，請核對）' : ''}`
+      ).join('<br>');
+      const direction = views[0].delta > 0 ? '向下' : '向上';
+      perMail[mi].push({
+        severity: 'warn', category: '圖片後內容上下位置', paraIndex: im.nextText.paraIndex,
+        message: `圖片 <code>${escapeHtml(im.id)}</code> 同下一段「${escapeHtml(im.nextText.text)}」之間嘅空位同其他 MAIL 不一致，令下一組內容${direction}移：<div class="ecm-snippet">${details}</div><div class="ecm-snippet">請檢查圖片所在格及下一段嘅 padding／margin。</div>`,
+      });
+    });
+  });
+  return perMail;
+}
+
 function crossListPositionIssues(mails, tierLabelOf) {
   const perMail = mails.map(() => []);
   const pendingByMail = mails.map(() => new Map());
@@ -2121,8 +2203,8 @@ function checkWhitespace(mail) {
     if (/(?:&nbsp;|\s)+\s*$/.test(p.html.trim()) && /&nbsp;/.test(p.html)) {
       issues.push({ severity: 'warn', category: '多餘空白', message: `段落尾部有多餘 <code>&amp;nbsp;</code>`, snippet: p.text, paraIndex: i });
     }
-    if (!cjkGaps.length && / {2,}/.test(spaceMasked)) {
-      issues.push({ severity: 'warn', category: '多餘空白', message: `段落有連續2+空格`, snippet: p.text, paraIndex: i });
+    if (!cjkGaps.length && / {2,}|[ \t\r\n][\u00a0\u3000]|[\u00a0\u3000][ \t\r\n\u00a0\u3000]/.test(spaceMasked)) {
+      issues.push({ severity: 'warn', category: '多餘空白', message: `段落有連續2+空格（包括普通空格＋&amp;nbsp;）`, snippet: p.text, paraIndex: i });
     }
     if (/(?:&nbsp;\s*){3,}/i.test(p.html)) {
       issues.push({ severity: 'warn', category: '多餘空白', message: `段落有連續3+個 <code>&amp;nbsp;</code>`, snippet: p.text, paraIndex: i });
@@ -3571,6 +3653,8 @@ async function runChecks() {
     imgPosPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
     const imgAlignPerMail = mails.length >= 2 ? crossImageAlignIssues(mails, tierLabelOf) : mails.map(() => []);
     imgAlignPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
+    const imgGapPerMail = mails.length >= 2 ? crossImageGapIssues(mails, tierLabelOf) : mails.map(() => []);
+    imgGapPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
     const listPositionPerMail = mails.length >= 2 ? crossListPositionIssues(mails, tierLabelOf) : mails.map(() => []);
     listPositionPerMail.forEach((list, mi) => { singlePerMail[mi].push(...list); });
     crossListGapIssues(mails, tierLabelOf).forEach((list, mi) => { singlePerMail[mi].push(...list); });
